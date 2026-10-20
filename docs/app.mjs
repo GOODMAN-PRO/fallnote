@@ -259,6 +259,7 @@ function beginBusy(title) {
   $('#job-progress').removeAttribute('value');
   $('#job-percent').textContent = '';
   $('#cancel-job').disabled = true;
+  $('#cancel-job').hidden = false;
   $('#cancel-job').textContent = 'Cancel';
   $('#job-panel').hidden = false;
   $('#notice').hidden = true;
@@ -279,7 +280,8 @@ async function runJob(path, body, title, completed) {
     const created = await request(path, { method: 'POST', body: JSON.stringify(body) });
     if (!created.jobId) throw new Error('The app did not return a task ID.');
     state.job = created.jobId;
-    $('#cancel-job').disabled = false;
+    $('#cancel-job').disabled = path === 'api/publish';
+    $('#cancel-job').hidden = path === 'api/publish';
     for (;;) {
       const job = await request(`api/jobs/${encodeURIComponent(created.jobId)}`);
       const progress = clamp(Number(job.progress) || 0, 0, 1);

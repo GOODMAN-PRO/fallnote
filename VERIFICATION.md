@@ -5,7 +5,7 @@ Checked on 20 October 2026.
 - `npm test`: 39 passing tests. Covers MIDI event timing and structure, piano geometry, note detection, brightness, repetitions, local HTTP security, file ranges, library persistence, request validation and scoped Zen profile selection using isolated fake profiles.
 - `npm run check`: server and browser JavaScript syntax passes.
 - `node scripts/verify-demo.mjs`: generated H.264 tutorial decodes into all 14 expected notes, with matching pitches, hands, onset times and durations within frame tolerance. Output is a valid Type 1 MIDI file.
-- Browser: demo import, conversion progress, the 14-note result, library listing, source calibration restoration and Web Audio preview controls exercised.
+- Browser: demo import, conversion progress, the 14-note result, library listing, source calibration restoration and Web Audio preview controls exercised. The Publish library button successfully committed a metadata update and pushed it to GitHub.
 - GitHub Pages deployed successfully. The published song download returns the same 7,439 MIDI bytes as the local file (SHA-256 `7c4141b0f4b9d719246b0461366437dbc0489aacb50294d1015643801ed5ab94`).
 - Supplied YouTube tutorial: downloaded after explicit one-video Zen-session permission. Converted the first 104 seconds using a 60 FPS sample rate, calibrated cyan/green colours and a brightness threshold. Result: 861 notes, 101.33 seconds, separate hand tracks. Excluded the unrelated end screen.
 
