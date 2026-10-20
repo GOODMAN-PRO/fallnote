@@ -1,8 +1,10 @@
+import { youtubeErrorPresentation, youtubeRetryRequest } from './youtube-errors.mjs';
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const state = {
   local: false, ready: false, busy: false, source: null, songs: [], job: null,
-  result: null, overlay: true, audio: null, audioToken: 0, editing: null,
+  result: null, overlay: true, audio: null, audioToken: 0, editing: null, youtubeRetry: null,
 };
 const presets = { 88: [21, 108], 61: [36, 96], 76: [28, 103] };
 const defaults = { left: .04, right: .96, line: .76, firstMidi: 21, lastMidi: 108 };
@@ -48,10 +50,36 @@ function formatTime(seconds) {
 
 function noteName(pitch) { return `${noteNames[pitch % 12]}${Math.floor(pitch / 12) - 1}`; }
 function clamp(value, minimum, maximum) { return Math.min(maximum, Math.max(minimum, value)); }
-function showNotice(message, error = false) {
+function clearYoutubeRecovery() {
+  state.youtubeRetry = null;
+  $('#youtube-recovery').hidden = true;
+  $('#failed-youtube-link').removeAttribute('href');
+  $('#failed-youtube-link').textContent = '';
+}
+
+function showNotice(message, error = false, diagnostic = '') {
+  clearYoutubeRecovery();
   $('#notice-text').textContent = message;
+  $('#notice-diagnostic').textContent = diagnostic;
+  $('#notice-details').hidden = !diagnostic;
+  $('#notice-details').open = false;
   $('#notice').classList.toggle('error', error);
   $('#notice').hidden = false;
+}
+
+function showYoutubeFailure(diagnostic, body) {
+  const presentation = youtubeErrorPresentation(diagnostic, body.useZenSession === true);
+  showNotice(presentation.message, true, presentation.details);
+  if (!presentation.offerZenRetry) return;
+  $('.session-option').open = true;
+  $('#use-zen-session').checked = false;
+  const retry = youtubeRetryRequest(body.url, $('#youtube-url').value);
+  if (!retry) return;
+  state.youtubeRetry = retry.url;
+  $('#youtube-recovery-advice').textContent = presentation.advice;
+  $('#failed-youtube-link').href = retry.url;
+  $('#failed-youtube-link').textContent = retry.url;
+  $('#youtube-recovery').hidden = false;
 }
 
 function apiUrl(path) { return new URL(path.replace(/^\/+/, ''), document.baseURI); }
@@ -206,8 +234,13 @@ function setSource(source) {
   if (!source || !source.sourceId || !source.url) throw new Error('The import did not return a usable video.');
   const media = new URL(source.url, document.baseURI);
   if (media.origin !== location.origin) throw new Error('The imported video must be served by the local app.');
+  clearYoutubeRecovery();
+  $('#use-zen-session').checked = false;
   video.pause();
   state.source = source;
+  const pageUrl = new URL(location.href);
+  pageUrl.searchParams.set('source', source.sourceId);
+  history.replaceState(history.state, '', pageUrl.href);
   state.result = null;
   $('#result-section').hidden = true;
   video.src = media.href;
@@ -252,6 +285,8 @@ function updateHandSettings() {
 }
 
 function beginBusy(title) {
+  clearYoutubeRecovery();
+  $('#use-zen-session').checked = false;
   state.busy = true;
   state.job = null;
   $('#job-title').textContent = title;
@@ -294,7 +329,8 @@ async function runJob(path, body, title, completed) {
       await new Promise(resolve => setTimeout(resolve, 800));
     }
   } catch (error) {
-    showNotice(error.message || 'Something went wrong. Please try again.', true);
+    if (path === 'api/youtube') showYoutubeFailure(error.message, body);
+    else showNotice(error.message || 'Something went wrong. Please try again.', true);
   } finally { endBusy(); }
 }
 
@@ -686,7 +722,16 @@ $('#library-tab').addEventListener('click', () => showView('library'));
 $('#open-library').addEventListener('click', () => showView('library'));
 $('#show-setup').addEventListener('click', () => showView('convert'));
 $('#empty-action').addEventListener('click', () => showView('convert'));
-$('#dismiss-notice').addEventListener('click', () => { $('#notice').hidden = true; });
+$('#dismiss-notice').addEventListener('click', () => { clearYoutubeRecovery(); $('#notice').hidden = true; });
+$('#youtube-url').addEventListener('input', () => { clearYoutubeRecovery(); $('#use-zen-session').checked = false; });
+$('#retry-youtube-zen').addEventListener('click', () => {
+  if (state.busy || !state.local) return;
+  const body = youtubeRetryRequest(state.youtubeRetry, $('#youtube-url').value);
+  clearYoutubeRecovery();
+  $('#use-zen-session').checked = false;
+  if (body) runJob('api/youtube', body, 'Retrying this tutorial with Zen', setSource);
+});
+$('#recovery-upload').addEventListener('click', () => { clearYoutubeRecovery(); $('#use-zen-session').checked = false; $('#video-file').click(); });
 $('#youtube-form').addEventListener('submit', event => {
   event.preventDefault();
   const url = $('#youtube-url').value.trim();
@@ -695,7 +740,7 @@ $('#youtube-form').addEventListener('submit', event => {
   $('#use-zen-session').checked = false;
   runJob('api/youtube', { url, ...(useZenSession ? { useZenSession: true } : {}) }, 'Importing your YouTube tutorial', setSource);
 });
-$('#upload-button').addEventListener('click', () => $('#video-file').click());
+$('#upload-button').addEventListener('click', () => { clearYoutubeRecovery(); $('#use-zen-session').checked = false; $('#video-file').click(); });
 $('#video-file').addEventListener('change', async event => {
   const file = event.target.files[0];
   if (!file || state.busy || !state.local) return;
@@ -717,6 +762,7 @@ $('#demo-button').addEventListener('click', async () => {
   finally { endBusy(); }
 });
 $('#cancel-job').addEventListener('click', async () => {
+  clearYoutubeRecovery();
   if (!state.job) return;
   $('#cancel-job').disabled = true;
   $('#cancel-job').textContent = 'Cancelling…';

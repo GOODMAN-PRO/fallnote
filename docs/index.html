@@ -25,7 +25,19 @@
     </header>
 
     <main id="main" class="app-main">
-      <div id="notice" class="notice" role="status" hidden><span id="notice-text"></span><button id="dismiss-notice" class="icon-button" aria-label="Dismiss message" type="button">×</button></div>
+      <div id="notice" class="notice" role="status" hidden>
+        <div class="notice-body">
+          <p id="notice-text"></p>
+          <div id="youtube-recovery" class="notice-recovery" hidden>
+            <p id="youtube-recovery-advice"></p>
+            <a id="failed-youtube-link" class="failed-video-link" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer"></a>
+            <div class="notice-recovery-actions"><button id="retry-youtube-zen" class="button small secondary" type="button" aria-describedby="retry-zen-disclosure" data-local data-idle>Retry this video with Zen</button><button id="recovery-upload" class="button small secondary" type="button" data-local data-idle>Upload a video</button></div>
+            <p id="retry-zen-disclosure" class="notice-disclosure">Retrying reads your Zen cookies locally to authenticate with YouTube for this video only. Cookies are never sent to GitHub.</p>
+          </div>
+          <details id="notice-details" class="notice-details" hidden><summary>Technical details</summary><pre id="notice-diagnostic"></pre></details>
+        </div>
+        <button id="dismiss-notice" class="icon-button" aria-label="Dismiss message" type="button">×</button>
+      </div>
       <section id="job-panel" class="job-panel" aria-label="Task progress" hidden>
         <div class="job-copy"><span id="job-title">Processing your video</span><span id="job-message" class="muted">Preparing…</span></div>
         <progress id="job-progress" max="1" value="0" aria-label="Task progress"></progress>
