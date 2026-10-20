@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#5145a7">
+    <meta name="description" content="Turn falling-note piano tutorials into MIDI, review your notes, and keep a downloadable practice library.">
+    <title>Fallnote · Your piano practice library</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+    <link rel="stylesheet" href="./style.css">
+    <script src="./app.mjs" type="module"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to workspace</a>
+    <header class="app-header">
+      <a class="brand" href="./" aria-label="Fallnote home">
+        <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="7" fill="currentColor"/><path d="M9 21V26M16 17V26M23 21V26" stroke="white" stroke-width="3" stroke-linecap="round"/><path d="M9 8V15M16 8V11M23 8V15" stroke="white" stroke-width="3" stroke-linecap="round"/></svg>
+        <span>fallnote<span class="brand-dot">.</span></span>
+      </a>
+      <nav class="tabs" aria-label="Workspace">
+        <button id="convert-tab" class="tab active" type="button" aria-current="page">Convert</button>
+        <button id="library-tab" class="tab" type="button">Library <span id="library-count" class="tab-count">0</span></button>
+      </nav>
+      <div class="header-end"><span id="connection" class="connection">Connecting…</span><a class="icon-button source-link" href="https://github.com/GOODMAN-PRO/fallnote" target="_blank" rel="noopener noreferrer" aria-label="View Fallnote on GitHub" title="View source on GitHub"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 9 4 12l4 3m8-6 4 3-4 3m-3-9-2 12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></a></div>
+    </header>
+
+    <main id="main" class="app-main">
+      <div id="notice" class="notice" role="status" hidden><span id="notice-text"></span><button id="dismiss-notice" class="icon-button" aria-label="Dismiss message" type="button">×</button></div>
+      <section id="job-panel" class="job-panel" aria-label="Task progress" hidden>
+        <div class="job-copy"><span id="job-title">Processing your video</span><span id="job-message" class="muted">Preparing…</span></div>
+        <progress id="job-progress" max="1" value="0" aria-label="Task progress"></progress>
+        <span id="job-percent" class="numeric">0%</span>
+        <button id="cancel-job" class="button small secondary" type="button">Cancel</button>
+      </section>
+
+      <section id="convert-view" aria-labelledby="convert-heading">
+        <div class="page-heading">
+          <div><h1 id="convert-heading">From falling notes to your next practice.</h1><p>Bring a piano tutorial. Leave with a MIDI you can play in VR.</p></div>
+          <span class="format-note"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4v16m10-16v16M4 10h6V4H4zm10 0h6V4h-6zM4 20h16" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg> Standard MIDI · Two hands</span>
+        </div>
+        <div id="static-guide" class="static-guide" hidden>
+          <div><strong>Conversion runs on your computer.</strong><p>This GitHub page holds your published MIDI library. Open the local app to add YouTube tutorials, align the notes, and publish new songs.</p></div>
+          <a class="button primary" href="https://github.com/GOODMAN-PRO/fallnote#run-on-windows" target="_blank" rel="noopener noreferrer">Set up the local app <span aria-hidden="true">↗</span></a>
+        </div>
+        <div id="dependencies" class="dependency-note" hidden></div>
+        <div class="workspace">
+          <div class="workbench">
+            <form id="youtube-form" class="source-form">
+              <label class="field-label" for="youtube-url">YouTube tutorial</label>
+              <div class="url-row"><div class="url-input"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="4" stroke="currentColor" stroke-width="1.7"/><path d="m10 9 5 3-5 3V9Z" fill="currentColor"/></svg><input id="youtube-url" name="url" type="url" placeholder="Paste a YouTube video link" required autocomplete="off" aria-describedby="source-help" data-local data-idle></div><button id="import-youtube" class="button primary" type="submit" data-local data-idle>Import video <span aria-hidden="true">↓</span></button></div>
+              <div class="source-options"><p id="source-help">Use a tutorial with coloured notes falling onto a visible keyboard.</p><div><button id="upload-button" class="text-button" type="button" data-local data-idle>Upload a video</button><span class="divider-dot" aria-hidden="true">·</span><button id="demo-button" class="text-button" type="button" data-local data-idle>Try the calibration demo</button></div></div>
+              <details class="session-option"><summary>YouTube asking you to sign in?</summary><label class="checkbox-label"><input id="use-zen-session" type="checkbox" autocomplete="off" aria-describedby="zen-session-disclosure" data-local data-idle> Use my Zen YouTube sign-in for this video only</label><p id="zen-session-disclosure">Reads your Zen cookies locally to authenticate with YouTube. Cookies are never sent to GitHub.</p></details>
+              <input id="video-file" type="file" accept="video/*,.mkv,.mov" hidden>
+            </form>
+            <div class="video-shell">
+              <div class="video-toolbar"><span class="video-title"><span class="status-dot"></span><span id="video-name">Video workspace</span></span><button id="overlay-toggle" class="video-toggle" type="button" aria-pressed="true" disabled>Guides on</button></div>
+              <div id="video-frame" class="video-frame">
+                <video id="source-video" preload="metadata" playsinline aria-label="Imported tutorial video" hidden></video>
+                <canvas id="calibration-overlay" aria-hidden="true" hidden></canvas>
+                <div id="video-empty" class="video-empty">
+                  <svg class="empty-keyboard" viewBox="0 0 184 84" fill="none" aria-hidden="true"><rect x="1" y="1" width="182" height="82" rx="7" stroke="currentColor"/><path d="M27 1v82m26-82v82m26-82v82m26-82v82m26-82v82m26-82v82" stroke="currentColor"/><path d="M20 1h14v46H20zm26 0h14v46H46zm52 0h14v46H98zm26 0h14v46h-14zm26 0h14v46h-14z" fill="currentColor"/></svg>
+                  <h2>Your next song starts here</h2>
+                  <p>Import a tutorial to line up its keyboard.<br>Fallnote reads the coloured bars as they pass the scan line.</p>
+                </div>
+              </div>
+              <div class="video-transport">
+                <button id="video-play" class="icon-button" type="button" disabled aria-label="Play source video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m9 5 11 7-11 7V5Z"/></svg></button>
+                <span id="video-time" class="numeric">0:00</span>
+                <input id="video-seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="Seek source video" disabled>
+                <span id="video-duration" class="numeric">0:00</span>
+                <button id="video-mute" class="icon-button" type="button" disabled aria-label="Mute source video"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Zm4 3a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              </div>
+            </div>
+            <p class="workbench-hint"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 11v6m0-10v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Seek to a section with notes. Place the scan line just above the keys, away from glow or particles. You can drag the guides.</span></p>
+          </div>
+
+          <aside class="settings-panel" aria-labelledby="settings-heading">
+            <div class="panel-heading"><h2 id="settings-heading">Make it playable</h2><span id="step-status">Import a video first</span></div>
+            <form id="convert-form">
+              <fieldset id="calibration-fields" disabled>
+                <legend class="sr-only">Video calibration and MIDI settings</legend>
+                <div class="settings-section metadata-fields">
+                  <label class="field-label" for="song-title">Song title</label><input id="song-title" type="text" maxlength="180" placeholder="Name your song" required>
+                  <label class="field-label" for="song-artist">Artist <span class="optional">optional</span></label><input id="song-artist" type="text" maxlength="180" placeholder="Artist or composer">
+                </div>
+                <div class="settings-section">
+                  <div class="section-label"><h3>Keyboard alignment</h3><button id="reset-guides" class="text-button" type="button">Reset</button></div>
+                  <label class="field-label" for="keyboard-preset">Visible keyboard</label>
+                  <select id="keyboard-preset"><option value="88">88 keys · A0 to C8</option><option value="61">61 keys · C2 to C7</option><option value="76">76 keys · E1 to G7</option><option value="custom">Custom range</option></select>
+                  <div id="custom-range" class="two-fields" hidden><div><label class="field-label" for="first-midi">First note</label><select id="first-midi" aria-label="First visible MIDI note"></select></div><div><label class="field-label" for="last-midi">Last note</label><select id="last-midi" aria-label="Last visible MIDI note"></select></div></div>
+                  <div class="range-field"><label for="left-margin">Left edge <output id="left-value" for="left-margin">4%</output></label><input id="left-margin" type="range" min="0" max="95" step="0.1" value="4"></div>
+                  <div class="range-field"><label for="right-margin">Right edge <output id="right-value" for="right-margin">96%</output></label><input id="right-margin" type="range" min="5" max="100" step="0.1" value="96"></div>
+                  <div class="range-field"><label for="scan-line"><span class="scan-key">Scan line</span><output id="line-value" for="scan-line">76%</output></label><input id="scan-line" type="range" min="2" max="98" step="0.1" value="76"></div>
+                </div>
+                <details class="advanced-settings">
+                  <summary>Detection &amp; hand settings <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m8 10 4 4 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></summary>
+                  <div class="advanced-content">
+                    <div class="two-fields clip-fields"><div><label class="field-label" for="start-time">Start (seconds)</label><input id="start-time" type="number" min="0" step="any" value="0"></div><div><label class="field-label" for="end-time">End (seconds)</label><input id="end-time" type="number" min="0.001" step="any" value="1"></div></div><p class="field-hint">Convert the playing section. Exclude intros and outros so titles or logos are not read as notes.</p>
+                    <label class="field-label" for="hand-mode">Separate hands by</label><select id="hand-mode"><option value="pitch">Pitch, below / above middle C</option><option value="color">Note colour</option></select>
+                    <div id="pitch-settings"><label class="field-label" for="split-midi">Right hand begins at</label><select id="split-midi"></select><p class="field-hint">Pitch splitting is an estimate. Crossed hands may need editing.</p></div>
+                    <div id="color-settings" hidden><div class="two-fields"><div><label class="field-label" for="left-hue">Left hue</label><input id="left-hue" type="number" min="0" max="359" value="200"></div><div><label class="field-label" for="right-hue">Right hue</label><input id="right-hue" type="number" min="0" max="359" value="120"></div></div><p class="field-hint">Hue in degrees: red 0, green 120, blue 240. Match each hand's note bars.</p></div>
+                    <div class="two-fields"><div><label class="field-label" for="detection-fps">Frames / second</label><select id="detection-fps"><option value="24">24 · Quicker</option><option value="30" selected>30 · Balanced</option><option value="60">60 · Fine timing</option></select></div><div><label class="field-label" for="minimum-note">Minimum note</label><select id="minimum-note"><option value="0.04">40 ms</option><option value="0.08" selected>80 ms</option><option value="0.12">120 ms</option></select></div></div>
+                    <div class="range-field"><label for="saturation">Minimum colour <output id="saturation-value" for="saturation">30%</output></label><input id="saturation" type="range" min="5" max="90" step="1" value="30"></div>
+                    <div class="range-field"><label for="brightness">Minimum brightness <output id="brightness-value" for="brightness">25%</output></label><input id="brightness" type="range" min="5" max="95" step="1" value="25"></div><p class="field-hint">Raise brightness to ignore dim backgrounds. Keep it below the brightness of the note bars.</p>
+                    <label class="checkbox-label"><input id="trim-silence" type="checkbox" checked> Trim silence before the first note</label>
+                  </div>
+                </details>
+                <div class="convert-action"><button id="convert-button" class="button primary full-width" type="submit"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18V5l11-2v13M9 9l11-2" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><ellipse cx="6" cy="18" rx="3" ry="2" fill="currentColor"/><ellipse cx="17" cy="16" rx="3" ry="2" fill="currentColor"/></svg> Convert to MIDI</button><p>Saved to your local library automatically.</p></div>
+              </fieldset>
+            </form>
+          </aside>
+        </div>
+        <section id="result-section" class="result-section" aria-labelledby="result-title" hidden>
+          <div class="result-heading"><div><span class="success-label">Conversion complete</span><h2 id="result-title">Your MIDI is ready</h2><p id="result-description"></p></div><div class="result-actions"><button id="preview-result" class="button secondary" type="button">Listen to MIDI</button><a id="download-result" class="button primary" href="./" download>Download MIDI <span aria-hidden="true">↓</span></a></div></div>
+          <canvas id="notes-preview" aria-label="Detected MIDI notes. Higher notes appear higher on this chart." role="img"></canvas>
+          <div class="result-footer"><p>Listen for missing or extra notes before practising. Adjust the guides and convert again if needed.</p><button id="open-library" class="text-button" type="button">Review in your library <span aria-hidden="true">→</span></button></div>
+        </section>
+      </section>
+
+      <section id="library-view" aria-labelledby="library-heading" hidden>
+        <div class="page-heading library-heading"><div><div class="heading-with-tag"><h1 id="library-heading">Your practice library</h1><span id="library-mode" class="tag">Local</span></div><p>Keep the songs you want to learn, ready for your piano in VR.</p></div><button id="publish-button" class="button primary" type="button" data-local data-idle><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M5 14v6h14v-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg> Publish library</button></div>
+        <div id="publish-explainer" class="library-info"><p><strong>On your computer.</strong> Publish your saved MIDI files to make them available on your GitHub page.</p><a id="published-link" href="https://goodman-pro.github.io/fallnote/" target="_blank" rel="noopener noreferrer">Open published library <span aria-hidden="true">↗</span></a></div>
+        <div id="public-explainer" class="library-info" hidden><p><strong>Ready to practise.</strong> Download a MIDI, then use your VR piano app's file import. The files contain separate left and right hand tracks.</p><button id="show-setup" class="text-button" type="button">Add your own tutorials <span aria-hidden="true">→</span></button></div>
+        <div class="library-toolbar"><div class="search-box"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><input id="library-search" type="search" placeholder="Search title or artist" aria-label="Search library"></div><label class="review-filter"><input id="reviewed-filter" type="checkbox"> Reviewed only</label><span id="song-count" class="muted">Loading songs…</span></div>
+        <div id="library-loading" class="library-loading" aria-label="Loading library"><div></div><div></div><div></div></div>
+        <div id="library-list" class="library-list"></div>
+        <div id="library-empty" class="library-empty" hidden><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="9" y="7" width="30" height="36" rx="4" stroke="currentColor" stroke-width="1.8"/><path d="M17 17h14m-14 6h9m-9 6h6m7 6V24l7-2v10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><ellipse cx="28" cy="35" rx="2.5" ry="1.8" fill="currentColor"/></svg><h2 id="empty-title">A place for your next favourite song</h2><p id="empty-copy">Convert your first tutorial and it will appear here, with a MIDI ready to download.</p><button id="empty-action" class="button secondary" type="button">Convert a tutorial <span aria-hidden="true">→</span></button></div>
+        <div class="vr-note"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M8 9h16l4 7v9h-7l-5-5-5 5H4v-9l4-7Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="10" cy="17" r="2" stroke="currentColor" stroke-width="1.7"/><circle cx="22" cy="17" r="2" stroke="currentColor" stroke-width="1.7"/></svg><div><strong>A little closer to playing it yourself.</strong><p>Download your .mid file, then <a href="https://pianogram.io/" target="_blank" rel="noopener noreferrer">open Pianogram</a> and upload it to your account. Hand display and playback can vary by app version; check the result in your headset.</p></div></div>
+      </section>
+      <footer class="app-footer"><span>Fallnote reads the video, one note at a time.</span><span>Visual detection <span aria-hidden="true">·</span> Review before you practise</span></footer>
+    </main>
+    <div id="audio-player" class="audio-player" role="region" aria-label="MIDI preview player" hidden><div><span class="audio-indicator" aria-hidden="true"></span><strong id="audio-title">MIDI preview</strong><span id="audio-time" class="numeric">0:00</span></div><button id="stop-audio" class="button small secondary" type="button">Stop preview <span aria-hidden="true">■</span></button></div>
+    <noscript><p class="notice">Enable JavaScript to browse the MIDI library and use the converter.</p></noscript>
+  </body>
+</html>

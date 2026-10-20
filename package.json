@@ -1,0 +1,13 @@
+{
+  "name": "fallnote",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Falling piano tutorials to MIDI, with a personal GitHub Pages library.",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check server.mjs && node --check docs/app.mjs"
+  },
+  "engines": { "node": ">=22" }
+}

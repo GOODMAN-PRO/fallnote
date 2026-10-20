@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "songs": [
+    {
+      "id": "7541d71b-c62a-4e83-9536-a10adc08e908",
+      "title": "KISS OF DEATH",
+      "artist": "Mika Nakashima · tutorial by Fonzi M",
+      "createdAt": "2026-10-20T08:08:09.898Z",
+      "duration": 101.33333333333333,
+      "noteCount": 861,
+      "file": "library/midi/7541d71b-c62a-4e83-9536-a10adc08e908.mid",
+      "method": "visual",
+      "handMode": "color",
+      "sourceName": "[Darling in the FranXX OP] \"KISS OF DEATH\" - Mika Nakashima x Hyde (Synthesia Piano Tutorial)",
+      "reviewed": false,
+      "pitchMin": 21,
+      "pitchMax": 108
+    }
+  ]
+}
