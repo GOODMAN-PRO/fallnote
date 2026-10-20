@@ -6,7 +6,7 @@ import { Transform } from 'node:stream';
 import { dirname, join, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { available, run } from './lib/process.mjs';
+import { executablePresent, run } from './lib/process.mjs';
 import { createLibrary } from './lib/library.mjs';
 import { registerVideo, findVideo, downloadVideo, convertVideo, makeDemo, youtubeUrl, zenSessionForVideo } from './lib/video.mjs';
 
@@ -32,7 +32,7 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
       const url = new URL(req.url, `http://${req.headers.host}`);
       const path = decodeURIComponent(url.pathname);
       if (req.method === 'GET' && path === '/api/status') {
-        dependencies ||= Promise.all([available('ffmpeg', ['-version']), available('ffprobe', ['-version']), available('yt-dlp'), available('gh', ['auth', 'status'])])
+        dependencies ||= Promise.all([executablePresent('ffmpeg'), executablePresent('ffprobe'), executablePresent('yt-dlp'), executablePresent('gh')])
           .then(([ffmpeg, ffprobe, ytdlp, github]) => ({ ffmpeg, ffprobe, ytdlp, github }));
         return json(res, 200, { local: true, version: '1.0.0', dependencies: await dependencies, repository, publishedUrl });
       }
