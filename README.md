@@ -51,6 +51,7 @@ If using a fork, update the static repository links in `docs/index.html` and `do
 npm test
 npm run check
 node scripts/verify-demo.mjs
+node scripts/verify-preview.mjs
 ```
 
 - `docs/`: static browser app and published library
