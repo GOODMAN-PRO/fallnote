@@ -66,6 +66,11 @@ test('exports a valid type-1 file with conductor and independent named hand trac
   assert.equal(parsed.format, 1);
   assert.equal(parsed.ppq, 480);
   assert.equal(parsed.tracks.length, 3);
+  // Pianogram played the notes but did not display them without explicit meter.
+  const meter = parsed.tracks[0].filter((event) => event.type === 0x58);
+  assert.equal(meter.length, 1);
+  assert.equal(meter[0].tick, 0);
+  assert.deepEqual([...meter[0].data], [4, 2, 24, 8]);
   const names = parsed.tracks.map((track) => new TextDecoder().decode(track.find((event) => event.type === 3).data));
   assert.deepEqual(names, ['Piano étude', 'Left Hand', 'Right Hand']);
   assert.deepEqual([...parsed.tracks[0].find((event) => event.type === 0x51).data], [7, 161, 32]);
