@@ -2,6 +2,21 @@
   "version": 1,
   "songs": [
     {
+      "id": "17d418c4-b460-42c3-a5ad-983f21821058",
+      "title": "Crossing Field - Medium Piano",
+      "artist": "PianoGumi tutorial",
+      "createdAt": "2026-10-21T12:46:21.142Z",
+      "duration": 100.4,
+      "noteCount": 721,
+      "file": "library/midi/17d418c4-b460-42c3-a5ad-983f21821058.mid",
+      "method": "visual",
+      "handMode": "color",
+      "sourceName": "Sword Art Online OP - \"Crossing Field\" - MEDIUM Piano Tutorial & Sheet Music",
+      "reviewed": false,
+      "pitchMin": 34,
+      "pitchMax": 89
+    },
+    {
       "id": "a6bc664d-fddd-4ecb-8283-ded82b445819",
       "title": "Kiss of Death - Easy Piano",
       "artist": "Mika Nakashima × HYDE · tutorial: OnlinePianist",
