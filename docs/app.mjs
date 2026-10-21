@@ -1,5 +1,6 @@
 import { youtubeErrorPresentation, youtubeRetryRequest } from './youtube-errors.mjs';
 import { publicationPresentation, safePublishedUrl } from './publication.mjs';
+import { youtubeRequest, retryYoutubeRequest, createYoutubeRunGate, scanRows } from './auto-flow.mjs';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -7,8 +8,9 @@ const state = {
   local: false, ready: false, busy: false, source: null, songs: [], job: null,
   result: null, overlay: true, audio: null, audioToken: 0, editing: null, youtubeRetry: null,
   publishedUrl: 'https://goodman-pro.github.io/fallnote/', jobCancellable: false, cancelling: false,
-  autoPublishSupported: false,
+  autoPublishSupported: false, autoConvertSupported: false, scanRows: {},
 };
+const youtubeRunGate = createYoutubeRunGate();
 const presets = { 88: [21, 108], 61: [36, 96], 76: [28, 103] };
 const defaults = { left: .04, right: .96, line: .76, firstMidi: 21, lastMidi: 108 };
 const noteNames = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
@@ -70,7 +72,7 @@ function showNotice(message, error = false, diagnostic = '') {
   $('#notice').hidden = false;
 }
 
-function showYoutubeFailure(diagnostic, body) {
+function showYoutubeFailure(diagnostic, body, path = 'api/youtube') {
   const presentation = youtubeErrorPresentation(diagnostic, body.useZenSession === true);
   showNotice(presentation.message, true, presentation.details);
   if (!presentation.offerZenRetry) return;
@@ -78,7 +80,7 @@ function showYoutubeFailure(diagnostic, body) {
   $('#use-zen-session').checked = false;
   const retry = youtubeRetryRequest(body.url, $('#youtube-url').value);
   if (!retry) return;
-  state.youtubeRetry = retry.url;
+  state.youtubeRetry = { url: retry.url, automatic: path === 'api/auto-convert', publish: body.publish === true };
   $('#youtube-recovery-advice').textContent = presentation.advice;
   $('#failed-youtube-link').href = retry.url;
   $('#failed-youtube-link').textContent = retry.url;
@@ -112,7 +114,21 @@ function updateAvailability() {
   $$('[data-local]').forEach(node => { node.disabled = !state.local || (state.busy && node.hasAttribute('data-idle')); });
   $('#calibration-fields').disabled = !state.local || !state.source || state.busy;
   $('#convert-button').disabled = !state.local || !state.source || state.busy || !state.autoPublishSupported;
-  $('#step-status').textContent = state.busy ? 'Working on your video…' : state.local && !state.autoPublishSupported ? 'Restart the local app to convert' : state.source ? 'Align the keyboard, then convert' : 'Import a video first';
+  const automatic = $('#automatic-mode').checked;
+  $('#import-youtube').disabled = !state.local || state.busy || (automatic && !state.autoConvertSupported);
+  $('#import-youtube').textContent = automatic ? 'Convert tutorial' : 'Import video';
+  $('#source-help').textContent = automatic ? 'Paste a full YouTube link to start. If alignment is uncertain, you can check it first.' : 'Import a tutorial, adjust its keyboard guides, then convert it to MIDI.';
+  $('#video-empty-copy').textContent = automatic
+    ? 'Paste a YouTube link to find its keyboard and turn the falling notes into MIDI.'
+    : 'Import a tutorial, then line up its keyboard guides before converting.';
+  $('#step-status').textContent = state.busy ? 'Working on your video…'
+    : state.result ? 'MIDI saved. Listen to the result.'
+    : state.local && !state.autoPublishSupported ? 'Restart the local app to convert'
+    : state.source?.alignment?.status === 'needs_review' ? 'Check the suggested alignment'
+    : state.source?.alignment?.status === 'ready' ? 'Automatic alignment loaded'
+    : state.source ? 'Align the keyboard, then convert'
+    : state.local && automatic && !state.autoConvertSupported ? 'Restart to enable automatic conversion'
+    : automatic ? 'Paste a YouTube link to start' : 'Import a video first';
   $$('.song-edit button, .song-edit input').forEach(node => { node.disabled = state.busy; });
 }
 
@@ -132,6 +148,7 @@ function showView(view) {
 
 function calibration() {
   return {
+    ...state.scanRows,
     left: Number($('#left-margin').value) / 100,
     right: Number($('#right-margin').value) / 100,
     line: Number($('#scan-line').value) / 100,
@@ -142,6 +159,8 @@ function calibration() {
 
 function applyCalibration(value) {
   const config = { ...defaults, ...value };
+  state.scanRows = scanRows(config);
+  if (!Number.isFinite(value?.line) && Number.isFinite(value?.whiteLine)) config.line = value.whiteLine;
   $('#left-margin').value = config.left * 100;
   $('#right-margin').value = config.right * 100;
   $('#scan-line').value = config.line * 100;
@@ -153,6 +172,14 @@ function applyCalibration(value) {
 }
 
 function updateGuides(event) {
+  if (event?.target.id === 'scan-line' && Object.keys(state.scanRows).length) {
+    state.scanRows = scanRows(state.scanRows, true);
+    $('#alignment-title').textContent = 'Alignment adjusted';
+    $('#alignment-reason').textContent = 'Using one scan line for all keys. Reset the guides to restore the suggested alignment.';
+    $('#alignment-summary').hidden = false;
+  }
+  $('#scan-row-hint').hidden = !Object.keys(state.scanRows).length;
+  $('#workbench-guidance').textContent = Object.keys(state.scanRows).length ? 'The guides mark separate white and black key rows. Seek to a playing section to check their alignment.' : 'Seek to a section with notes. Place the scan line just above the keys, away from glow or particles. You can drag the guides.';
   if (Number($('#right-margin').value) - Number($('#left-margin').value) < 5) {
     if (event?.target.id === 'left-margin') $('#left-margin').value = Number($('#right-margin').value) - 5;
     else $('#right-margin').value = Number($('#left-margin').value) + 5;
@@ -196,7 +223,9 @@ function drawOverlay() {
   if (!surface) return;
   const { ctx, width, height } = surface;
   const config = calibration();
-  const left = width * config.left, right = width * config.right, line = height * config.line;
+  const left = width * config.left, right = width * config.right;
+  const whiteY = height * (config.whiteLine ?? config.line), blackY = height * (config.blackLine ?? config.line);
+  const separateRows = Math.abs(whiteY - blackY) > .5;
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = 'rgba(13, 16, 23, 0.42)';
   ctx.fillRect(0, 0, left, height);
@@ -208,29 +237,34 @@ function drawOverlay() {
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
   }
   ctx.setLineDash([]);
-  ctx.strokeStyle = '#72e3b6';
   ctx.lineWidth = 1.7;
-  ctx.beginPath(); ctx.moveTo(left, line); ctx.lineTo(right, line); ctx.stroke();
+  for (const [y, color] of separateRows ? [[whiteY, '#72e3b6'], [blackY, '#c5b7ff']] : [[whiteY, '#72e3b6']]) {
+    ctx.strokeStyle = color;
+    ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+  }
   ctx.font = '10px "Segoe UI", sans-serif';
   ctx.textAlign = 'center';
   for (const lane of keyboardLanes(config)) {
     const x = lane.x * width;
+    const y = lane.black ? blackY : whiteY;
     ctx.fillStyle = lane.black ? '#baa7ff' : '#ffffff';
-    ctx.fillRect(x - .6, line - (lane.black ? 7 : 4), 1.2, lane.black ? 14 : 8);
+    ctx.fillRect(x - .6, y - (lane.black ? 7 : 4), 1.2, lane.black ? 14 : 8);
     if (lane.pitch % 12 === 0) {
       ctx.fillStyle = 'rgba(13,16,23,.8)';
-      ctx.fillRect(x - 13, line + 13, 26, 16);
+      ctx.fillRect(x - 13, y + 13, 26, 16);
       ctx.fillStyle = '#f1f0f6';
-      ctx.fillText(noteName(lane.pitch), x, line + 24);
+      ctx.fillText(noteName(lane.pitch), x, y + 24);
     }
   }
-  ctx.fillStyle = '#72e3b6';
-  ctx.fillRect(clamp(left + 6, 4, width - 76), Math.max(2, line - 24), 65, 18);
-  ctx.fillStyle = '#13291f';
-  ctx.textAlign = 'left';
-  ctx.fillText('SCAN LINE', clamp(left + 12, 10, width - 70), Math.max(14, line - 11));
+  const labels = separateRows ? [[whiteY, 'WHITE KEYS', '#72e3b6'], [blackY, 'BLACK KEYS', '#c5b7ff']] : [[whiteY, 'SCAN LINE', '#72e3b6']];
+  for (const [y, label, color] of labels) {
+    ctx.fillStyle = color;
+    ctx.fillRect(clamp(left + 6, 4, width - 84), Math.max(2, y - 24), 75, 18);
+    ctx.fillStyle = '#13291f'; ctx.textAlign = 'left';
+    ctx.fillText(label, clamp(left + 12, 10, width - 78), Math.max(14, y - 11));
+  }
   for (const x of [left, right]) {
-    ctx.beginPath(); ctx.arc(x, line, 4, 0, Math.PI * 2); ctx.fillStyle = '#c5b7ff'; ctx.fill();
+    ctx.beginPath(); ctx.arc(x, whiteY, 4, 0, Math.PI * 2); ctx.fillStyle = '#c5b7ff'; ctx.fill();
   }
 }
 
@@ -272,14 +306,58 @@ function setSource(source) {
   $('#saturation').value = (source.options?.saturation ?? .3) * 100;
   $('#brightness').value = (source.options?.brightness ?? .25) * 100;
   $('#detection-fps').value = source.options?.fps ?? 30;
-  $('#minimum-note').value = source.options?.minNote ?? .08;
+  const minNote = source.options?.minNote ?? .08;
+  if (![...$('#minimum-note').options].some(option => Number(option.value) === minNote)) {
+    const option = el('option', '', Math.round(minNote * 1000) + ' ms'); option.value = minNote; $('#minimum-note').append(option);
+  }
+  $('#minimum-note').value = minNote;
   $('#split-midi').value = source.options?.splitMidi ?? 60;
   $('#trim-silence').checked = source.options?.trim ?? true;
   updateGuides();
   updateHandSettings();
+  renderAlignment(source.alignment);
   updateAvailability();
   showNotice('Video imported. Seek to some notes and align the keyboard guides before converting.');
   showView('convert');
+}
+
+function renderAlignment(alignment) {
+  $('#alignment-summary').hidden = !alignment;
+  if (!alignment) return;
+  const review = alignment.status === 'needs_review';
+  $('#alignment-title').textContent = review ? 'Check the alignment' : 'Automatic alignment';
+  $('#alignment-reason').textContent = review ? alignment.reason || 'Check the keyboard edges, note range and scan lines before converting.' : 'The keyboard and note colours were detected automatically. Listen to the MIDI before practising.';
+}
+
+async function handleAutomaticResult(result) {
+  if (!result?.source || !['ready', 'needs_review'].includes(result.alignment?.status)) throw new Error('The automatic task did not return a usable alignment result.');
+  const alignment = result.alignment;
+  setSource({
+    ...result.source,
+    calibration: { ...result.source.calibration, ...alignment.calibration },
+    options: { ...result.source.options, ...alignment.options },
+    alignment,
+  });
+  if (alignment.status === 'needs_review') {
+    showNotice('The video is imported, but its alignment needs a check. Adjust the guides and choose Convert to MIDI. No MIDI has been created or published.');
+    return;
+  }
+  showResult(result);
+  $('#song-title').value = result.song.title || $('#song-title').value;
+  $('#song-artist').value = result.song.artist || '';
+  await loadLibrary();
+}
+
+function startYoutubeRequest(request, trigger = 'submit') {
+  if (!state.local || state.busy) return;
+  if (!request) { showNotice('Paste a complete https YouTube video link, then try again.', true); return; }
+  const automatic = request.path === 'api/auto-convert';
+  if (automatic && !state.autoConvertSupported) { showNotice('Restart the local Fallnote server and refresh this page to enable automatic alignment and conversion.', true); return; }
+  if (!youtubeRunGate.claim(request, trigger)) return;
+  $('#use-zen-session').checked = false;
+  video.pause(); stopAudio();
+  return runJob(request.path, request.body, automatic ? 'Preparing your tutorial' : 'Importing your YouTube tutorial', automatic ? handleAutomaticResult : setSource)
+    .finally(() => youtubeRunGate.finish());
 }
 
 function updateHandSettings() {
@@ -329,6 +407,10 @@ async function runJob(path, body, title, completed) {
       $('#job-progress').value = progress;
       $('#job-percent').textContent = `${Math.round(progress * 100)}%`;
       $('#job-message').textContent = job.message || 'Processing…';
+      if (path === 'api/auto-convert') {
+        const phases = { download: 'Importing your tutorial', analyse: 'Aligning the keyboard', convert: 'Reading the notes', publish: 'Publishing your VR library' };
+        $('#job-title').textContent = phases[job.phase] || 'Preparing your tutorial';
+      }
       state.jobCancellable = job.cancellable === true && job.status === 'running';
       $('#cancel-job').hidden = !state.jobCancellable;
       $('#cancel-job').disabled = !state.jobCancellable || state.cancelling;
@@ -338,7 +420,7 @@ async function runJob(path, body, title, completed) {
       await new Promise(resolve => setTimeout(resolve, 800));
     }
   } catch (error) {
-    if (path === 'api/youtube') showYoutubeFailure(error.message, body);
+    if (path === 'api/youtube' || path === 'api/auto-convert') showYoutubeFailure(error.message, body, path);
     else if (path === 'api/publish') showPublication({ status: 'failed', url: state.publishedUrl, error: error.message });
     else showNotice(error.message || 'Something went wrong. Please try again.', true);
   } finally { endBusy(); }
@@ -701,6 +783,7 @@ function stopAudio(increment = true) {
 async function init() {
   $('#use-zen-session').checked = false;
   $('#publish-on-convert').checked = true;
+  $('#automatic-mode').checked = true;
   for (const selector of ['#first-midi', '#last-midi', '#split-midi']) {
     for (let pitch = 0; pitch <= 127; pitch++) {
       const option = el('option', '', `${noteName(pitch)} · ${pitch}`);
@@ -717,6 +800,7 @@ async function init() {
       state.local = status.local === true;
       if (state.local) {
         state.autoPublishSupported = status.features?.autoPublish === true;
+        state.autoConvertSupported = status.features?.autoConvert === true;
         const missing = ['ffmpeg', 'ffprobe', 'ytdlp'].filter(name => !status.dependencies?.[name]);
         if (missing.length) {
           $('#dependencies').hidden = false;
@@ -737,7 +821,7 @@ async function init() {
   $('#publish-explainer').hidden = !state.local;
   $('#public-explainer').hidden = state.local;
   $('#static-guide').hidden = state.local;
-  $('#runtime-update-notice').hidden = !state.local || state.autoPublishSupported;
+  $('#runtime-update-notice').hidden = !state.local || (state.autoPublishSupported && state.autoConvertSupported);
   if (!state.local) {
     $('.workspace').hidden = true;
     $('.format-note').hidden = true;
@@ -759,12 +843,21 @@ $('#show-setup').addEventListener('click', () => showView('convert'));
 $('#empty-action').addEventListener('click', () => showView('convert'));
 $('#dismiss-notice').addEventListener('click', () => { clearYoutubeRecovery(); $('#notice').hidden = true; });
 $('#youtube-url').addEventListener('input', () => { clearYoutubeRecovery(); $('#use-zen-session').checked = false; });
+$('#youtube-url').addEventListener('paste', () => {
+  if (!$('#automatic-mode').checked || state.busy) return;
+  setTimeout(() => {
+    if (!$('#automatic-mode').checked || state.busy) return;
+    const request = youtubeRequest({ url: $('#youtube-url').value, automatic: true, publish: $('#publish-on-convert').checked, useZenSession: false });
+    if (request) startYoutubeRequest(request, 'paste');
+  }, 0);
+});
+$('#automatic-mode').addEventListener('change', updateAvailability);
 $('#retry-youtube-zen').addEventListener('click', () => {
   if (state.busy || !state.local) return;
-  const body = youtubeRetryRequest(state.youtubeRetry, $('#youtube-url').value);
+  const request = retryYoutubeRequest(state.youtubeRetry, $('#youtube-url').value, $('#publish-on-convert').checked);
   clearYoutubeRecovery();
   $('#use-zen-session').checked = false;
-  if (body) runJob('api/youtube', body, 'Retrying this tutorial with Zen', setSource);
+  if (request) startYoutubeRequest(request, 'retry');
 });
 $('#recovery-upload').addEventListener('click', () => { clearYoutubeRecovery(); $('#use-zen-session').checked = false; $('#video-file').click(); });
 $('#youtube-form').addEventListener('submit', event => {
@@ -773,7 +866,7 @@ $('#youtube-form').addEventListener('submit', event => {
   if (!url || state.busy) return;
   const useZenSession = $('#use-zen-session').checked;
   $('#use-zen-session').checked = false;
-  runJob('api/youtube', { url, ...(useZenSession ? { useZenSession: true } : {}) }, 'Importing your YouTube tutorial', setSource);
+  startYoutubeRequest(youtubeRequest({ url, automatic: $('#automatic-mode').checked, publish: $('#publish-on-convert').checked, useZenSession }));
 });
 $('#upload-button').addEventListener('click', () => { clearYoutubeRecovery(); $('#use-zen-session').checked = false; $('#video-file').click(); });
 $('#video-file').addEventListener('change', async event => {
@@ -837,7 +930,7 @@ $('#keyboard-preset').addEventListener('change', event => {
   if (range) { $('#first-midi').value = range[0]; $('#last-midi').value = range[1]; }
   drawOverlay();
 });
-$('#reset-guides').addEventListener('click', () => applyCalibration(state.source?.calibration || defaults));
+$('#reset-guides').addEventListener('click', () => { applyCalibration(state.source?.calibration || defaults); renderAlignment(state.source?.alignment); });
 for (const selector of ['#left-margin', '#right-margin', '#scan-line', '#saturation', '#brightness', '#first-midi', '#last-midi']) $(selector).addEventListener('input', updateGuides);
 $('#hand-mode').addEventListener('change', updateHandSettings);
 $('#overlay-toggle').addEventListener('click', () => {
@@ -878,7 +971,8 @@ overlay.addEventListener('pointerdown', event => {
   const distances = [
     ['left-margin', Math.abs(x - config.left * rect.width)],
     ['right-margin', Math.abs(x - config.right * rect.width)],
-    ['scan-line', Math.abs(y - config.line * rect.height)],
+    ['scan-line', Math.abs(y - (config.whiteLine ?? config.line) * rect.height)],
+    ['scan-line', Math.abs(y - (config.blackLine ?? config.line) * rect.height)],
   ].sort((a, b) => a[1] - b[1]);
   if (distances[0][1] < 24) { dragGuide = distances[0][0]; overlay.setPointerCapture(event.pointerId); event.preventDefault(); }
 });

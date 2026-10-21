@@ -51,17 +51,18 @@
           <span class="format-note"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4v16m10-16v16M4 10h6V4H4zm10 0h6V4h-6zM4 20h16" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg> Standard MIDI · Two hands</span>
         </div>
         <div id="static-guide" class="static-guide" hidden>
-          <div><strong>Convert on your PC. Download in VR.</strong><p>Open the local app to convert tutorials and publish them here. Your published MIDI files stay online even when your PC is off.</p></div>
-          <a class="button primary" href="https://github.com/GOODMAN-PRO/fallnote#run-on-windows" target="_blank" rel="noopener noreferrer">Set up the local app <span aria-hidden="true">↗</span></a>
+          <div><strong>Convert on your PC. Download in VR.</strong><p>The PC app must be running to convert tutorials. Open it below, or set it up first. This GitHub page is your VR download library; published MIDI files stay online when your PC is off.</p></div>
+          <div class="setup-actions"><a class="button primary" href="http://127.0.0.1:8788/" target="_blank" rel="noopener noreferrer">Open converter on this PC <span aria-hidden="true">↗</span></a><a class="button secondary" href="https://github.com/GOODMAN-PRO/fallnote#run-on-windows" target="_blank" rel="noopener noreferrer">Set up the local app <span aria-hidden="true">↗</span></a></div>
         </div>
         <div id="dependencies" class="dependency-note" hidden></div>
-        <div id="runtime-update-notice" class="dependency-note" role="status" hidden><strong>Restart the local app to continue.</strong> The running server does not support automatic VR publishing yet. Restart Fallnote, then refresh this page to enable conversion.</div>
+        <div id="runtime-update-notice" class="dependency-note" role="status" hidden><strong>Restart the local app for automatic conversion.</strong> Restart Fallnote, then refresh this page to enable automatic alignment, conversion and VR publishing. You can switch off automatic mode to import a video manually.</div>
         <div class="workspace">
           <div class="workbench">
             <form id="youtube-form" class="source-form">
+              <div class="source-preferences"><label class="checkbox-label"><input id="automatic-mode" type="checkbox" checked data-local data-idle> Automatically align and convert</label><div class="publish-choice"><label class="checkbox-label"><input id="publish-on-convert" type="checkbox" checked aria-describedby="publish-disclosure" data-local data-idle> Publish to my VR library</label><p id="publish-disclosure">MIDI files and song details will be public. The video stays on this PC.</p></div></div>
               <label class="field-label" for="youtube-url">YouTube tutorial</label>
               <div class="url-row"><div class="url-input"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="4" stroke="currentColor" stroke-width="1.7"/><path d="m10 9 5 3-5 3V9Z" fill="currentColor"/></svg><input id="youtube-url" name="url" type="url" placeholder="Paste a YouTube video link" required autocomplete="off" aria-describedby="source-help" data-local data-idle></div><button id="import-youtube" class="button primary" type="submit" data-local data-idle>Import video <span aria-hidden="true">↓</span></button></div>
-              <div class="source-options"><p id="source-help">Use a tutorial with coloured notes falling onto a visible keyboard.</p><div><button id="upload-button" class="text-button" type="button" data-local data-idle>Upload a video</button><span class="divider-dot" aria-hidden="true">·</span><button id="demo-button" class="text-button" type="button" data-local data-idle>Try the calibration demo</button></div></div>
+              <div class="source-options"><p id="source-help">Paste a full YouTube link to start. If alignment is uncertain, you can check it first.</p><div><button id="upload-button" class="text-button" type="button" data-local data-idle>Upload a video</button><span class="divider-dot" aria-hidden="true">·</span><button id="demo-button" class="text-button" type="button" data-local data-idle>Try the calibration demo</button></div></div>
               <details class="session-option"><summary>YouTube asking you to sign in?</summary><label class="checkbox-label"><input id="use-zen-session" type="checkbox" autocomplete="off" aria-describedby="zen-session-disclosure" data-local data-idle> Use my Zen YouTube sign-in for this video only</label><p id="zen-session-disclosure">Reads your Zen cookies locally to authenticate with YouTube. Cookies are never sent to GitHub.</p></details>
               <input id="video-file" type="file" accept="video/*,.mkv,.mov" hidden>
             </form>
@@ -73,7 +74,7 @@
                 <div id="video-empty" class="video-empty">
                   <svg class="empty-keyboard" viewBox="0 0 184 84" fill="none" aria-hidden="true"><rect x="1" y="1" width="182" height="82" rx="7" stroke="currentColor"/><path d="M27 1v82m26-82v82m26-82v82m26-82v82m26-82v82m26-82v82" stroke="currentColor"/><path d="M20 1h14v46H20zm26 0h14v46H46zm52 0h14v46H98zm26 0h14v46h-14zm26 0h14v46h-14z" fill="currentColor"/></svg>
                   <h2>Your next song starts here</h2>
-                  <p>Import a tutorial to line up its keyboard.<br>Fallnote reads the coloured bars as they pass the scan line.</p>
+                  <p id="video-empty-copy">Paste a YouTube link to find its keyboard and turn the falling notes into MIDI.</p>
                 </div>
               </div>
               <div class="video-transport">
@@ -84,11 +85,12 @@
                 <button id="video-mute" class="icon-button" type="button" disabled aria-label="Mute source video"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Zm4 3a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
               </div>
             </div>
-            <p class="workbench-hint"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 11v6m0-10v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Seek to a section with notes. Place the scan line just above the keys, away from glow or particles. You can drag the guides.</span></p>
+            <p class="workbench-hint"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 11v6m0-10v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="workbench-guidance">Seek to a section with notes. Place the scan line just above the keys, away from glow or particles. You can drag the guides.</span></p>
+            <div id="alignment-summary" class="alignment-summary" role="status" hidden><strong id="alignment-title">Automatic alignment</strong><p id="alignment-reason"></p></div>
           </div>
 
           <aside class="settings-panel" aria-labelledby="settings-heading">
-            <div class="panel-heading"><h2 id="settings-heading">Make it playable</h2><span id="step-status">Import a video first</span></div>
+            <div class="panel-heading"><h2 id="settings-heading">Make it playable</h2><span id="step-status">Paste a YouTube link to start</span></div>
             <form id="convert-form">
               <fieldset id="calibration-fields" disabled>
                 <legend class="sr-only">Video calibration and MIDI settings</legend>
@@ -104,6 +106,7 @@
                   <div class="range-field"><label for="left-margin">Left edge <output id="left-value" for="left-margin">4%</output></label><input id="left-margin" type="range" min="0" max="95" step="0.1" value="4"></div>
                   <div class="range-field"><label for="right-margin">Right edge <output id="right-value" for="right-margin">96%</output></label><input id="right-margin" type="range" min="5" max="100" step="0.1" value="96"></div>
                   <div class="range-field"><label for="scan-line"><span class="scan-key">Scan line</span><output id="line-value" for="scan-line">76%</output></label><input id="scan-line" type="range" min="2" max="98" step="0.1" value="76"></div>
+                  <p id="scan-row-hint" class="field-hint" hidden>Automatic alignment uses separate rows for white and black keys. Moving the scan line switches to one row.</p>
                 </div>
                 <details class="advanced-settings">
                   <summary>Detection &amp; hand settings <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m8 10 4 4 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></summary>
@@ -111,14 +114,14 @@
                     <div class="two-fields clip-fields"><div><label class="field-label" for="start-time">Start (seconds)</label><input id="start-time" type="number" min="0" step="any" value="0"></div><div><label class="field-label" for="end-time">End (seconds)</label><input id="end-time" type="number" min="0.001" step="any" value="1"></div></div><p class="field-hint">Convert the playing section. Exclude intros and outros so titles or logos are not read as notes.</p>
                     <label class="field-label" for="hand-mode">Separate hands by</label><select id="hand-mode"><option value="pitch">Pitch, below / above middle C</option><option value="color">Note colour</option></select>
                     <div id="pitch-settings"><label class="field-label" for="split-midi">Right hand begins at</label><select id="split-midi"></select><p class="field-hint">Pitch splitting is an estimate. Crossed hands may need editing.</p></div>
-                    <div id="color-settings" hidden><div class="two-fields"><div><label class="field-label" for="left-hue">Left hue</label><input id="left-hue" type="number" min="0" max="359" value="200"></div><div><label class="field-label" for="right-hue">Right hue</label><input id="right-hue" type="number" min="0" max="359" value="120"></div></div><p class="field-hint">Hue in degrees: red 0, green 120, blue 240. Match each hand's note bars.</p></div>
+                    <div id="color-settings" hidden><div class="two-fields"><div><label class="field-label" for="left-hue">Left hue</label><input id="left-hue" type="number" min="0" max="360" step="any" value="200"></div><div><label class="field-label" for="right-hue">Right hue</label><input id="right-hue" type="number" min="0" max="360" step="any" value="120"></div></div><p class="field-hint">Hue in degrees: red 0, green 120, blue 240. Match each hand's note bars.</p></div>
                     <div class="two-fields"><div><label class="field-label" for="detection-fps">Frames / second</label><select id="detection-fps"><option value="24">24 · Quicker</option><option value="30" selected>30 · Balanced</option><option value="60">60 · Fine timing</option></select></div><div><label class="field-label" for="minimum-note">Minimum note</label><select id="minimum-note"><option value="0.04">40 ms</option><option value="0.08" selected>80 ms</option><option value="0.12">120 ms</option></select></div></div>
                     <div class="range-field"><label for="saturation">Minimum colour <output id="saturation-value" for="saturation">30%</output></label><input id="saturation" type="range" min="5" max="90" step="1" value="30"></div>
                     <div class="range-field"><label for="brightness">Minimum brightness <output id="brightness-value" for="brightness">25%</output></label><input id="brightness" type="range" min="5" max="95" step="1" value="25"></div><p class="field-hint">Raise brightness to ignore dim backgrounds. Keep it below the brightness of the note bars.</p>
                     <label class="checkbox-label"><input id="trim-silence" type="checkbox" checked> Trim silence before the first note</label>
                   </div>
                 </details>
-                <div class="convert-action"><div class="publish-choice"><label class="checkbox-label"><input id="publish-on-convert" type="checkbox" checked aria-describedby="publish-disclosure"> Publish to my VR library</label><p id="publish-disclosure">MIDI files and song details will be public. The video stays on this PC.</p></div><button id="convert-button" class="button primary full-width" type="submit"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18V5l11-2v13M9 9l11-2" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><ellipse cx="6" cy="18" rx="3" ry="2" fill="currentColor"/><ellipse cx="17" cy="16" rx="3" ry="2" fill="currentColor"/></svg> Convert to MIDI</button><p class="local-save-note">A copy is always saved on this PC.</p></div>
+                <div class="convert-action"><button id="convert-button" class="button primary full-width" type="submit"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18V5l11-2v13M9 9l11-2" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><ellipse cx="6" cy="18" rx="3" ry="2" fill="currentColor"/><ellipse cx="17" cy="16" rx="3" ry="2" fill="currentColor"/></svg> Convert to MIDI</button><p id="manual-publish-note" class="local-save-note">Uses your publish choice above. A local copy is always saved.</p></div>
               </fieldset>
             </form>
           </aside>

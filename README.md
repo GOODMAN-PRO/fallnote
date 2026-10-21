@@ -18,19 +18,21 @@ Open `http://127.0.0.1:8788`. There are no npm packages to install. The converte
 
 ## Convert a tutorial
 
-1. Paste a YouTube link and load the video. Use a tutorial with a fixed, visible keyboard and solid coloured falling bars. If YouTube asks you to sign in, the optional Zen checkbox permits using your Zen YouTube session for that import only. It resets after each request. Without that explicit selection, Fallnote does not read browser cookies. Local MP4 uploads are available as a fallback.
-2. Seek to a part with visible notes. Choose the visible keyboard range, align its left and right edges, and put the scan line just above the keys where solid bars pass. The first and last selected notes must be white keys.
-3. Set a song title. Choose approximate hand splitting by pitch, or map the two bar colours to hands. Convert and listen to the result.
+1. Open the **local PC app**. Automatic conversion is on by default: paste a complete YouTube video link to import, align and convert it. You can also use Enter or the import button. Use a tutorial with a fixed digital keyboard, coloured key presses and matching piano audio. The public GitHub page links to the PC converter and hosts the finished downloads.
+2. Fallnote detects the keyboard edges, visible key range, hand colours and tutorial time range. It checks the octave against the audio and can read white and black keys at separate heights to avoid obscured notes. If it cannot confirm the alignment, it loads the video for manual adjustment and does not convert or publish it automatically.
+3. Listen to the result. For manual control, turn off automatic conversion before importing, seek to visible notes, align the keyboard edges and scan line, and choose the visible note range. The first and last notes must be white keys. Choose approximate hand splitting by pitch, or map the two hand colours. Moving the scan-line slider replaces an automatic two-height scan with a manual single line.
 4. **Publish to my VR library** is on by default. After conversion, Fallnote saves the MIDI on your PC, publishes the library to GitHub, and checks that the public download is live. Wait for **Ready in your VR library** before switching your PC off. Publishing includes song titles, artist labels, source names and MIDI files; original videos stay on your PC. Turn this option off to keep this conversion local until the next time you publish the library. If publishing fails, the MIDI stays saved and **Publish library** retries without reconverting.
 5. Download a `.mid` from the published page and import it directly in Pianogram on your headset. The library's **Kiss of Death - Easy Piano** file has been confirmed to display notes through this route. New conversions still need their own playback and note-accuracy checks.
 
 The PC is needed for conversion and publishing. Once the website says the song is ready, the GitHub Pages downloads remain available with the PC switched off. Renaming or removing a local song still needs **Publish library** to update the public website.
 
+If YouTube asks you to sign in, the optional Zen checkbox permits using your Zen YouTube session for that import only. It resets after each request. Without that explicit selection, Fallnote does not read browser cookies. Pasting a link never silently grants browser-session access. Local MP4 uploads remain available for manual conversion.
+
 The built-in **calibration exercise** is an original, generated test clip containing chords, black keys, long notes and repeated notes. Its known note sequence is used to check the complete video-to-MIDI path.
 
 ## What the converter can recover
 
-This version uses deterministic computer vision, not a trained AI model. It reads coloured bars at a calibrated scan line and translates their position and duration into notes. It writes standard Type 1 MIDI with separate Left Hand and Right Hand tracks and an acoustic piano program.
+This version uses deterministic computer vision and audio analysis, not a trained AI model. It reads coloured bars or key presses at calibrated scan heights and translates their position and duration into notes. Audio helps establish the octave; note timing and duration still come from the video. It writes standard Type 1 MIDI with separate Left Hand and Right Hand tracks and an acoustic piano program.
 
 - Timing is sampled at 24, 30 or 60 frames per second; gaps shorter than one sample can merge repeated notes.
 - Colour mapping can preserve hands when the tutorial gives each hand a consistent colour. Pitch splitting is an approximation.
@@ -58,6 +60,7 @@ node scripts/verify-preview.mjs
 
 - `docs/`: static browser app and published library
 - `lib/vision.mjs`: calibrated RGB/HSV note detector
+- `lib/autocalibrate.mjs`: keyboard geometry, hand colours, audio octave check and confidence gate
 - `lib/midi.mjs`: MIDI writer
 - `lib/video.mjs`: video import, decoding, demo renderer
 - `server.mjs`: loopback API and static server

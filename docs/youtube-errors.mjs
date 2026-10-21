@@ -18,6 +18,19 @@ export function youtubeErrorPresentation(diagnostic, usedZenSession = false) {
       details,
     };
   }
+  if (/\b(?:HTTP(?:\s+Error)?\s*403|403\s*:\s*Forbidden)\b/i.test(normalized)) {
+    return {
+      kind: 'forbidden',
+      message: usedZenSession
+        ? 'YouTube rejected the signed-in download for this video.'
+        : 'YouTube refused this video download (403).',
+      advice: usedZenSession
+        ? 'Check that this video plays while signed in to YouTube in Zen. You can try again or upload a video file; YouTube may still reject the download.'
+        : 'You can try your YouTube sign-in in Zen for this video, or upload a video file. A signed-in retry may still be blocked.',
+      offerZenRetry: true,
+      details,
+    };
+  }
   let message = 'This YouTube video could not be imported. Check the details below, or upload a video file.';
   if (/\b(?:private video|video unavailable|video is unavailable|video has been removed|video has been deleted)\b/i.test(normalized)) {
     message = 'This video is unavailable to the importer. Check the link, or upload a video file.';

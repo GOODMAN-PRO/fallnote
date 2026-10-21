@@ -46,6 +46,25 @@ test('missing Zen profile has specific guidance, without a blind signed-in retry
   assert.match(result.message, /could not use your Zen sign-in/);
 });
 
+test('terminal video-data 403 offers an explicit one-video Zen attempt without promising success', () => {
+  const diagnostic = 'WARNING: Requested formats may be unavailable\nERROR: unable to download video data: HTTP Error 403: Forbidden';
+  const result = youtubeErrorPresentation(diagnostic);
+  assert.equal(result.kind, 'forbidden');
+  assert.equal(result.offerZenRetry, true);
+  assert.equal(result.details, diagnostic);
+  assert.match(result.message, /refused.*403/);
+  assert.match(result.advice, /may still be blocked/);
+  const signedIn = youtubeErrorPresentation(diagnostic, true);
+  assert.match(signedIn.message, /rejected the signed-in download/);
+  assert.match(signedIn.advice, /may still reject/);
+});
+
+test('an earlier 403 warning does not override a different terminal failure', () => {
+  const result = youtubeErrorPresentation('WARNING: HTTP Error 403: Forbidden\nERROR: Requested format is not available');
+  assert.equal(result.kind, 'other');
+  assert.equal(result.offerZenRetry, false);
+});
+
 test('explicit retry preserves the exact failed URL and cannot follow an edited input', () => {
   const url = 'https://www.youtube.com/watch?v=cStbWxTQTJo&t=3';
   assert.deepEqual(youtubeRetryRequest(url, url), { url, useZenSession: true });

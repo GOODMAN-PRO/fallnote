@@ -11,11 +11,11 @@ const blacks = new Set([61, 63, 66, 68, 70]);
 const BLUE = [0, 170, 255]; // hue 200
 const GREEN = [0, 255, 0]; // hue 120
 
-function frame(notes = []) {
+function frame(notes = [], row = 60) {
   const rgb = new Uint8Array(WIDTH * HEIGHT * 3);
   for (const { pitch, color = GREEN, wide = false } of notes) {
     const half = wide ? 50 : (blacks.has(pitch) ? 20 : 33);
-    for (let y = 58; y <= 62; y += 1) {
+    for (let y = Math.max(0, row - 2); y <= Math.min(HEIGHT - 1, row + 2); y += 1) {
       for (let x = Math.max(0, centers[pitch] - half); x < Math.min(WIDTH, centers[pitch] + half); x += 1) {
         rgb.set(color, (y * WIDTH + x) * 3);
       }
@@ -163,6 +163,97 @@ test('touching full-width white bars do not invent a black note between them', (
   assert.deepEqual(engine.finish(0.3).map((note) => note.pitch), [60, 62]);
 });
 
+test('separate rows recover white C and F obscured by black keys while retaining an upper-row black note', () => {
+  const rgb = new Uint8Array(WIDTH * HEIGHT * 3);
+  function rectangle(left, right, top, bottom, color) {
+    for (let y = top; y <= bottom; y += 1) {
+      for (let x = left; x < right; x += 1) rgb.set(color, (y * WIDTH + x) * 3);
+    }
+  }
+  // Physical keyboard fixture: C/F extend below black-key tips. Their upper
+  // sampling centres are partly covered by the adjacent unlit black shapes.
+  rectangle(0, 100, 40, 110, GREEN);
+  rectangle(300, 400, 40, 110, BLUE);
+  rectangle(50, 120, 40, 75, [0, 0, 0]);
+  rectangle(350, 420, 40, 75, [0, 0, 0]);
+  rectangle(180, 220, 40, 75, BLUE); // E-flat is visible only above its tip.
+  const options = { handMode: 'color', leftHue: 200, rightHue: 120, trim: true };
+  function read(calibrated) {
+    const engine = detector(options, { calibration: calibrated });
+    engine.pushFrame(frame(), 0);
+    engine.pushFrame(rgb, 0.2);
+    engine.pushFrame(rgb, 0.4);
+    engine.pushFrame(frame(), 0.6);
+    return engine.finish(0.7);
+  }
+  assert.deepEqual(read({ ...calibration, line: 60 / 119 }).map(note => note.pitch), [63]);
+  assert.deepEqual(read({ ...calibration, line: 90 / 119 }).map(note => note.pitch), [60, 65]);
+  for (const rows of [
+    { line: 60 / 119, whiteLine: 90 / 119 },
+    { line: 90 / 119, blackLine: 60 / 119 },
+    { whiteLine: 90 / 119, blackLine: 60 / 119 }
+  ]) {
+    const notes = read({ ...calibration, ...rows });
+    assert.deepEqual(notes.map(({ pitch, hand }) => ({ pitch, hand })), [
+      { pitch: 60, hand: 'right' }, { pitch: 63, hand: 'left' }, { pitch: 65, hand: 'left' }
+    ]);
+    for (const note of notes) {
+      near(note.start, 0);
+      near(note.duration, 0.4);
+    }
+  }
+});
+
+test('omitted class rows preserve the original single-row bar notes and timing', () => {
+  const on = frame([{ pitch: 60, color: BLUE }, { pitch: 61 }, { pitch: 67 }]);
+  const read = rows => {
+    const engine = detector({ handMode: 'color', leftHue: 200, rightHue: 120 }, { calibration: { ...calibration, ...rows } });
+    engine.pushFrame(frame(), 0);
+    engine.pushFrame(on, 0.2);
+    engine.pushFrame(frame(), 0.4);
+    engine.pushFrame(on, 0.6);
+    return engine.finish(0.8);
+  };
+  const original = read({});
+  assert.equal(original.length, 6);
+  for (const rows of [
+    { whiteLine: calibration.line }, { blackLine: calibration.line },
+    { whiteLine: calibration.line, blackLine: calibration.line }
+  ]) assert.deepEqual(read(rows), original);
+});
+
+test('false-sharp suppression checks the black row rather than the separate white row', () => {
+  function read(upper, lower) {
+    const rgb = frame(upper, 60);
+    const bottom = frame(lower, 90);
+    rgb.set(bottom.subarray(88 * WIDTH * 3, 93 * WIDTH * 3), 88 * WIDTH * 3);
+    const engine = detector({}, { calibration: { ...calibration, whiteLine: 90 / 119, blackLine: 60 / 119 } });
+    engine.pushFrame(rgb, 0);
+    return engine.finish(0.3).map(note => note.pitch);
+  }
+  assert.deepEqual(read(
+    [{ pitch: 60, wide: true }, { pitch: 62, wide: true }],
+    [{ pitch: 60 }, { pitch: 62 }]
+  ), [60, 62], 'A continuous upper-row bridge must not invent C-sharp');
+  assert.deepEqual(read(
+    [{ pitch: 61 }],
+    [{ pitch: 60, wide: true }, { pitch: 62, wide: true }]
+  ), [60, 61, 62], 'A separate upper-row black note must survive touching white keys below');
+});
+
+test('separate scan rows support frame boundaries without sampling outside the image', () => {
+  const rgb = frame([{ pitch: 60 }], 0);
+  const bottom = frame([{ pitch: 61, color: BLUE }], HEIGHT - 1);
+  rgb.set(bottom.subarray((HEIGHT - 3) * WIDTH * 3), (HEIGHT - 3) * WIDTH * 3);
+  const engine = detector({ handMode: 'color', leftHue: 200, rightHue: 120 }, {
+    calibration: { ...calibration, whiteLine: 0, blackLine: 1 }
+  });
+  engine.pushFrame(rgb, 0);
+  assert.deepEqual(engine.finish(0.3).map(({ pitch, hand }) => ({ pitch, hand })), [
+    { pitch: 60, hand: 'right' }, { pitch: 61, hand: 'left' }
+  ]);
+});
+
 test('finish closes held notes, is repeatable, and returns independent note objects', () => {
   const engine = detector();
   engine.pushFrame(frame([{ pitch: 69 }]), 0.1);
@@ -186,6 +277,11 @@ test('invalid calibration, options, frame bytes, and timestamps fail explicitly'
   assert.throws(() => detector({}, { width: 0 }), /Frame width/);
   assert.throws(() => detector({}, { fps: 0 }), /Frames per second/);
   assert.throws(() => detector({}, { calibration: { ...calibration, line: 1.1 } }), /Scan line/);
+  for (const field of ['whiteLine', 'blackLine']) {
+    for (const value of [-0.1, 1.1, NaN, Infinity, -Infinity, '0.5']) {
+      assert.throws(() => detector({}, { calibration: { ...calibration, [field]: value } }), /scan line/);
+    }
+  }
   const engine = detector();
   assert.throws(() => engine.pushFrame(new Uint8Array(2), 0), /RGB24/);
   assert.throws(() => engine.pushFrame(frame(), NaN), /timestamp/);

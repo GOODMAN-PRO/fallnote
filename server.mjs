@@ -10,6 +10,7 @@ import { executablePresent } from './lib/process.mjs';
 import { createLibrary } from './lib/library.mjs';
 import { registerVideo, findVideo, downloadVideo, convertVideo, makeDemo, youtubeUrl, zenSessionForVideo } from './lib/video.mjs';
 import { publishLibrary } from './lib/publish.mjs';
+import { autoCalibrate } from './lib/autocalibrate.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.mkv': 'video/x-matroska', '.mid': 'audio/midi' };
@@ -27,12 +28,43 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
   const videoById = services.findVideo || findVideo;
   const readNotes = services.convertVideo || convertVideo;
   const sendLibrary = services.publishLibrary || publishLibrary;
+  const importVideo = services.downloadVideo || downloadVideo;
+  const alignVideo = services.autoCalibrate || autoCalibrate;
+  const authorizeZen = services.zenSessionForVideo || zenSessionForVideo;
   async function publish(context, verifyFile) {
     libraryBusy = true;
     context.setCancellable(false);
+    context.setPhase('publish');
     try {
       return await library.exclusive(() => sendLibrary({ root, repository, publishedUrl, progress: context.progress, verifyFile }));
     } finally { libraryBusy = false; }
+  }
+  async function importYoutube(source, useZenSession, context) {
+    context.setPhase('download');
+    // Consent is scoped to this exact import and never retained across requests.
+    const browserSession = useZenSession === true ? await authorizeZen(source) : undefined;
+    return importVideo(mediaDir, source, { ...context, browserSession });
+  }
+  async function convertAndSave(video, input, context) {
+    context.setPhase('convert');
+    const options = input.options || {};
+    const shouldPublish = input.publish !== false;
+    const notes = await readNotes(video, input.calibration, options, {
+      ...context, progress: (value, message) => context.progress(value * (shouldPublish ? 0.75 : 1), message),
+    });
+    context.signal.throwIfAborted();
+    if (notes.length > 100000) throw new Error('Too many notes detected. Check the scan line and video background.');
+    const song = await library.save(notes, { title: input.title || video.name, artist: input.artist, sourceName: video.name, handMode: options.handMode });
+    context.signal.throwIfAborted();
+    let publication = { status: 'local', url: publishedUrl };
+    if (shouldPublish) {
+      try {
+        publication = await publish({ ...context, progress: (value, message) => context.progress(0.75 + value * 0.25, message) }, song.file);
+      } catch (error) {
+        publication = { status: 'failed', url: publishedUrl, error: error.message, message: 'MIDI saved on this PC, but it is not on your VR website yet. Retry Publish library.' };
+      }
+    }
+    return { song, notes, publication };
   }
   const server = http.createServer(async (req, res) => {
     try {
@@ -45,7 +77,7 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
       if (req.method === 'GET' && path === '/api/status') {
         dependencies ||= Promise.all([executablePresent('ffmpeg'), executablePresent('ffprobe'), executablePresent('yt-dlp'), executablePresent('gh')])
           .then(([ffmpeg, ffprobe, ytdlp, github]) => ({ ffmpeg, ffprobe, ytdlp, github }));
-        return json(res, 200, { local: true, version: '1.1.0', features: { autoPublish: true }, dependencies: await dependencies, repository, publishedUrl });
+        return json(res, 200, { local: true, version: '1.2.0', features: { autoPublish: true, autoConvert: true }, dependencies: await dependencies, repository, publishedUrl });
       }
       const videoMatch = path.match(/^\/api\/videos\/([a-f0-9-]{36})$/);
       if (req.method === 'GET' && videoMatch) {
@@ -86,10 +118,29 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
       if (req.method === 'POST' && path === '/api/youtube') {
         const { url: input, useZenSession } = await body(req);
         const source = youtubeUrl(input);
-        // Consent belongs to this request only; it is never saved or reused.
-        const job = startJob('youtube', async context => {
-          const browserSession = useZenSession === true ? await zenSessionForVideo(source) : undefined;
-          return downloadVideo(mediaDir, source, { ...context, browserSession });
+        const job = startJob('youtube', context => importYoutube(source, useZenSession, context));
+        return json(res, 202, { jobId: job.id });
+      }
+      if (req.method === 'POST' && path === '/api/auto-convert') {
+        const input = await body(req);
+        const url = youtubeUrl(input.url);
+        if ('publish' in input && typeof input.publish !== 'boolean') throw new Error('Publish must be true or false.');
+        const job = startJob('auto-convert', async context => {
+          const phase = (from, span) => ({ ...context, progress: (value, message) => context.progress(from + value * span, message) });
+          const imported = await importYoutube(url, input.useZenSession, phase(0, 0.35));
+          context.signal.throwIfAborted();
+          const video = await videoById(mediaDir, imported.sourceId);
+          const { path: localPath, filename, ...source } = video;
+          context.setPhase('analyse');
+          context.progress(0.35, 'Finding the keyboard and note colours…');
+          const alignment = await alignVideo(video, phase(0.35, 0.2));
+          context.signal.throwIfAborted();
+          if (alignment.status !== 'ready') return { source, alignment };
+          const converted = await convertAndSave(video, {
+            title: input.title, artist: input.artist, publish: input.publish,
+            calibration: alignment.calibration, options: alignment.options,
+          }, phase(0.55, 0.45));
+          return { source, alignment, ...converted };
         });
         return json(res, 202, { jobId: job.id });
       }
@@ -101,29 +152,9 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
         const input = await body(req);
         const video = await videoById(mediaDir, input.sourceId);
         if (!input.calibration || typeof input.calibration !== 'object') throw new Error('Calibrate the keyboard before converting.');
-        const options = input.options || {};
         if ('publish' in input && typeof input.publish !== 'boolean') throw new Error('Publish must be true or false.');
         if (libraryBusy) throw Object.assign(new Error('Wait for library publishing to finish.'), { status: 409 });
-        const job = startJob('convert', async context => {
-          const shouldPublish = input.publish !== false;
-          const notes = await readNotes(video, input.calibration, options, {
-            ...context, progress: (value, message) => context.progress(value * (shouldPublish ? 0.75 : 1), message),
-          });
-          if (context.signal.aborted) throw new Error('Cancelled.');
-          if (notes.length > 100000) throw new Error('Too many notes detected. Check the scan line and video background.');
-          const song = await library.save(notes, { title: input.title || video.name, artist: input.artist, sourceName: video.name, handMode: options.handMode });
-          if (context.signal.aborted) throw new Error('Cancelled.');
-          let publication = { status: 'local', url: publishedUrl };
-          if (shouldPublish) {
-            try {
-              publication = await publish({ ...context, progress: (value, message) => context.progress(0.75 + value * 0.25, message) }, song.file);
-            } catch (error) {
-              // Keep a successful conversion downloadable even if GitHub is unavailable.
-              publication = { status: 'failed', url: publishedUrl, error: error.message, message: 'MIDI saved on this PC, but it is not on your VR website yet. Retry Publish library.' };
-            }
-          }
-          return { song, notes, publication };
-        });
+        const job = startJob('convert', context => convertAndSave(video, input, context));
         return json(res, 202, { jobId: job.id });
       }
       const songMatch = path.match(/^\/api\/library\/([a-f0-9-]{36})$/);
@@ -163,6 +194,7 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
     Promise.resolve().then(() => task({
       signal: job.controller.signal,
       setCancellable: value => { job.cancellable = Boolean(value); },
+      setPhase: value => { if (job.status === 'running') job.phase = value; },
       progress: (value, message) => { if (job.status === 'running') { job.progress = value; job.message = message; } }
     })).then(result => {
       if (job.status === 'cancelled') return;

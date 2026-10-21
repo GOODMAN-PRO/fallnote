@@ -10,7 +10,7 @@ A piano learner converting falling-note tutorial videos on a Windows PC, then do
 
 ## Product Purpose
 
-Import a video file or a YouTube tutorial on the PC, align a note detector with the visible keyboard, convert the coloured bars to MIDI, and automatically publish the result to a GitHub Pages library for VR downloads. Published downloads stay available with the PC switched off.
+Paste a YouTube tutorial in the PC app to import, automatically align the keyboard, convert the coloured notes to MIDI, and publish the result to a GitHub Pages library for VR downloads. Uncertain alignment falls back to manual adjustment. Published downloads stay available with the PC switched off.
 
 ## Design Direction
 
@@ -22,6 +22,7 @@ A clear music workbench. The learner compares a dark video frame with calibratio
 - Explain what the detector sees before conversion.
 - Distinguish saved local songs from the published library.
 - Confirm the public download is live before calling a conversion ready in VR.
+- Ask for manual alignment when the keyboard or octave cannot be confirmed; do not silently guess.
 - Label algorithmic hand splitting and timing limits honestly.
 - Keep downloads available without login on the public library.
 
