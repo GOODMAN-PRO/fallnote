@@ -2,6 +2,21 @@
   "version": 1,
   "songs": [
     {
+      "id": "05bbe75e-10f8-4f2e-af21-a8ae2602d44b",
+      "title": "Kiss of Death - Easy Piano (Reference Layout Test)",
+      "artist": "Mika Nakashima × HYDE · tutorial: OnlinePianist",
+      "createdAt": "2026-10-21T05:42:46.516Z",
+      "duration": 86.53333333333333,
+      "noteCount": 271,
+      "file": "library/midi/05bbe75e-10f8-4f2e-af21-a8ae2602d44b.mid",
+      "method": "visual",
+      "handMode": "color",
+      "sourceName": "Darling in the FranXX OP - Kiss of Death - EASY Piano Tutorial",
+      "reviewed": false,
+      "pitchMin": 33,
+      "pitchMax": 77
+    },
+    {
       "id": "ecd75e2e-2813-458c-aca0-7b344e2f89e6",
       "title": "KISS OF DEATH — Easy Piano (Single Track)",
       "artist": "Mika Nakashima × HYDE · tutorial: OnlinePianist",
