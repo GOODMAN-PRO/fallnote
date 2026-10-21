@@ -6,15 +6,16 @@ import { Transform } from 'node:stream';
 import { dirname, join, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { executablePresent, run } from './lib/process.mjs';
+import { executablePresent } from './lib/process.mjs';
 import { createLibrary } from './lib/library.mjs';
 import { registerVideo, findVideo, downloadVideo, convertVideo, makeDemo, youtubeUrl, zenSessionForVideo } from './lib/video.mjs';
+import { publishLibrary } from './lib/publish.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.mkv': 'video/x-matroska', '.mid': 'audio/midi' };
 const MAX_UPLOAD = 750 * 1024 * 1024;
 
-export function createApp({ root = ROOT, port = 8788, repository = process.env.FALLNOTE_REPOSITORY || 'GOODMAN-PRO/fallnote' } = {}) {
+export function createApp({ root = ROOT, port = 8788, repository = process.env.FALLNOTE_REPOSITORY || 'GOODMAN-PRO/fallnote', services = {} } = {}) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new Error('Invalid repository.');
   const mediaDir = join(root, '.local', 'media');
   const library = createLibrary(root);
@@ -23,6 +24,16 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
   let dependencies;
   let libraryBusy = false;
   let portInUse = port;
+  const videoById = services.findVideo || findVideo;
+  const readNotes = services.convertVideo || convertVideo;
+  const sendLibrary = services.publishLibrary || publishLibrary;
+  async function publish(context, verifyFile) {
+    libraryBusy = true;
+    context.setCancellable(false);
+    try {
+      return await library.exclusive(() => sendLibrary({ root, repository, publishedUrl, progress: context.progress, verifyFile }));
+    } finally { libraryBusy = false; }
+  }
   const server = http.createServer(async (req, res) => {
     try {
       const allowedHosts = [`localhost:${portInUse}`, `127.0.0.1:${portInUse}`];
@@ -34,11 +45,11 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
       if (req.method === 'GET' && path === '/api/status') {
         dependencies ||= Promise.all([executablePresent('ffmpeg'), executablePresent('ffprobe'), executablePresent('yt-dlp'), executablePresent('gh')])
           .then(([ffmpeg, ffprobe, ytdlp, github]) => ({ ffmpeg, ffprobe, ytdlp, github }));
-        return json(res, 200, { local: true, version: '1.0.0', dependencies: await dependencies, repository, publishedUrl });
+        return json(res, 200, { local: true, version: '1.1.0', features: { autoPublish: true }, dependencies: await dependencies, repository, publishedUrl });
       }
       const videoMatch = path.match(/^\/api\/videos\/([a-f0-9-]{36})$/);
       if (req.method === 'GET' && videoMatch) {
-        const { path: localPath, filename, ...video } = await findVideo(mediaDir, videoMatch[1]);
+        const { path: localPath, filename, ...video } = await videoById(mediaDir, videoMatch[1]);
         return json(res, 200, video);
       }
       const jobMatch = path.match(/^\/api\/jobs\/([a-f0-9-]{36})(\/cancel)?$/);
@@ -48,7 +59,7 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
         if (req.method === 'GET' && !jobMatch[2]) return json(res, 200, publicJob(job));
         if (req.method === 'POST' && jobMatch[2]) {
           await body(req);
-          if (job.type === 'publish') return json(res, 409, { error: 'Publishing cannot be cancelled once the Git push starts.' });
+          if (!job.cancellable) return json(res, 409, { error: 'Publishing is finishing. Wait for the website status before closing the app.' });
           if (job.status === 'running') { job.controller.abort(); job.status = 'cancelled'; job.message = 'Cancelled.'; }
           return json(res, 200, { ok: true });
         }
@@ -88,16 +99,30 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
       }
       if (req.method === 'POST' && path === '/api/convert') {
         const input = await body(req);
-        const video = await findVideo(mediaDir, input.sourceId);
+        const video = await videoById(mediaDir, input.sourceId);
         if (!input.calibration || typeof input.calibration !== 'object') throw new Error('Calibrate the keyboard before converting.');
         const options = input.options || {};
+        if ('publish' in input && typeof input.publish !== 'boolean') throw new Error('Publish must be true or false.');
         if (libraryBusy) throw Object.assign(new Error('Wait for library publishing to finish.'), { status: 409 });
         const job = startJob('convert', async context => {
-          const notes = await convertVideo(video, input.calibration, options, context);
+          const shouldPublish = input.publish !== false;
+          const notes = await readNotes(video, input.calibration, options, {
+            ...context, progress: (value, message) => context.progress(value * (shouldPublish ? 0.75 : 1), message),
+          });
           if (context.signal.aborted) throw new Error('Cancelled.');
           if (notes.length > 100000) throw new Error('Too many notes detected. Check the scan line and video background.');
           const song = await library.save(notes, { title: input.title || video.name, artist: input.artist, sourceName: video.name, handMode: options.handMode });
-          return { song, notes };
+          if (context.signal.aborted) throw new Error('Cancelled.');
+          let publication = { status: 'local', url: publishedUrl };
+          if (shouldPublish) {
+            try {
+              publication = await publish({ ...context, progress: (value, message) => context.progress(0.75 + value * 0.25, message) }, song.file);
+            } catch (error) {
+              // Keep a successful conversion downloadable even if GitHub is unavailable.
+              publication = { status: 'failed', url: publishedUrl, error: error.message, message: 'MIDI saved on this PC, but it is not on your VR website yet. Retry Publish library.' };
+            }
+          }
+          return { song, notes, publication };
         });
         return json(res, 202, { jobId: job.id });
       }
@@ -112,26 +137,7 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
       if (req.method === 'POST' && path === '/api/publish') {
         await body(req);
         if ([...jobs.values()].some(job => job.status === 'running')) throw Object.assign(new Error('Wait for the current job to finish before publishing.'), { status: 409 });
-        const job = startJob('publish', async context => {
-          libraryBusy = true;
-          try {
-            return await library.exclusive(async () => {
-              context.progress(0.1, 'Checking the GitHub repository…');
-              const { stdout: remote } = await run('git', ['remote', 'get-url', 'origin'], { cwd: root });
-              if (![ `https://github.com/${repository}.git`, `https://github.com/${repository}`, `git@github.com:${repository}.git` ].includes(remote.trim())) throw new Error('The Git remote does not match this library. Check FALLNOTE_REPOSITORY.');
-              const { stdout: branch } = await run('git', ['branch', '--show-current'], { cwd: root });
-              if (branch.trim() !== 'main') throw new Error('Switch this app repository to main before publishing.');
-              await run('git', ['add', '--', 'docs/library'], { cwd: root });
-              const { stdout: changes } = await run('git', ['diff', '--cached', '--name-only', '--', 'docs/library'], { cwd: root });
-              if (changes.trim()) {
-                await run('git', ['commit', '-m', 'Update MIDI library', '--only', '--', 'docs/library'], { cwd: root });
-              }
-              context.progress(0.55, 'Sending the library to GitHub…');
-              await run('git', ['push', 'origin', 'main'], { cwd: root, timeout: 120000 });
-              return { url: publishedUrl, message: 'Saved to GitHub. Pages may take a minute to update.' };
-            });
-          } finally { libraryBusy = false; }
-        });
+        const job = startJob('publish', context => publish(context));
         return json(res, 202, { jobId: job.id });
       }
       if (path.startsWith('/api/')) return json(res, 404, { error: 'API endpoint not found.' });
@@ -152,10 +158,11 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
   function startJob(type, task) {
     if ([...jobs.values()].some(job => job.status === 'running')) throw Object.assign(new Error('Wait for the current job to finish or cancel it.'), { status: 409 });
     while (jobs.size >= 20) jobs.delete(jobs.keys().next().value);
-    const job = { id: randomUUID(), type, status: 'running', progress: 0, message: type === 'youtube' ? 'Requesting video from YouTube…' : 'Starting…', controller: new AbortController() };
+    const job = { id: randomUUID(), type, status: 'running', cancellable: type !== 'publish', progress: 0, message: type === 'youtube' ? 'Requesting video from YouTube…' : 'Starting…', controller: new AbortController() };
     jobs.set(job.id, job);
     Promise.resolve().then(() => task({
       signal: job.controller.signal,
+      setCancellable: value => { job.cancellable = Boolean(value); },
       progress: (value, message) => { if (job.status === 'running') { job.progress = value; job.message = message; } }
     })).then(result => {
       if (job.status === 'cancelled') return;

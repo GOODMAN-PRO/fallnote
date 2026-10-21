@@ -1,10 +1,13 @@
 import { youtubeErrorPresentation, youtubeRetryRequest } from './youtube-errors.mjs';
+import { publicationPresentation, safePublishedUrl } from './publication.mjs';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const state = {
   local: false, ready: false, busy: false, source: null, songs: [], job: null,
   result: null, overlay: true, audio: null, audioToken: 0, editing: null, youtubeRetry: null,
+  publishedUrl: 'https://goodman-pro.github.io/fallnote/', jobCancellable: false, cancelling: false,
+  autoPublishSupported: false,
 };
 const presets = { 88: [21, 108], 61: [36, 96], 76: [28, 103] };
 const defaults = { left: .04, right: .96, line: .76, firstMidi: 21, lastMidi: 108 };
@@ -108,7 +111,8 @@ function midiUrl(file) {
 function updateAvailability() {
   $$('[data-local]').forEach(node => { node.disabled = !state.local || (state.busy && node.hasAttribute('data-idle')); });
   $('#calibration-fields').disabled = !state.local || !state.source || state.busy;
-  $('#step-status').textContent = state.busy ? 'Working on your video…' : state.source ? 'Align the keyboard, then convert' : 'Import a video first';
+  $('#convert-button').disabled = !state.local || !state.source || state.busy || !state.autoPublishSupported;
+  $('#step-status').textContent = state.busy ? 'Working on your video…' : state.local && !state.autoPublishSupported ? 'Restart the local app to convert' : state.source ? 'Align the keyboard, then convert' : 'Import a video first';
   $$('.song-edit button, .song-edit input').forEach(node => { node.disabled = state.busy; });
 }
 
@@ -289,12 +293,14 @@ function beginBusy(title) {
   $('#use-zen-session').checked = false;
   state.busy = true;
   state.job = null;
+  state.jobCancellable = false;
+  state.cancelling = false;
   $('#job-title').textContent = title;
   $('#job-message').textContent = 'Preparing…';
   $('#job-progress').removeAttribute('value');
   $('#job-percent').textContent = '';
   $('#cancel-job').disabled = true;
-  $('#cancel-job').hidden = false;
+  $('#cancel-job').hidden = true;
   $('#cancel-job').textContent = 'Cancel';
   $('#job-panel').hidden = false;
   $('#notice').hidden = true;
@@ -304,6 +310,8 @@ function beginBusy(title) {
 function endBusy() {
   state.busy = false;
   state.job = null;
+  state.jobCancellable = false;
+  state.cancelling = false;
   $('#job-panel').hidden = true;
   updateAvailability();
 }
@@ -315,14 +323,15 @@ async function runJob(path, body, title, completed) {
     const created = await request(path, { method: 'POST', body: JSON.stringify(body) });
     if (!created.jobId) throw new Error('The app did not return a task ID.');
     state.job = created.jobId;
-    $('#cancel-job').disabled = path === 'api/publish';
-    $('#cancel-job').hidden = path === 'api/publish';
     for (;;) {
       const job = await request(`api/jobs/${encodeURIComponent(created.jobId)}`);
       const progress = clamp(Number(job.progress) || 0, 0, 1);
       $('#job-progress').value = progress;
       $('#job-percent').textContent = `${Math.round(progress * 100)}%`;
       $('#job-message').textContent = job.message || 'Processing…';
+      state.jobCancellable = job.cancellable === true && job.status === 'running';
+      $('#cancel-job').hidden = !state.jobCancellable;
+      $('#cancel-job').disabled = !state.jobCancellable || state.cancelling;
       if (job.status === 'completed') { await completed(job.result); break; }
       if (job.status === 'failed') throw new Error(job.error || job.message || 'The task could not be completed.');
       if (job.status === 'cancelled') { showNotice('Task cancelled. You can adjust your settings and try again.'); break; }
@@ -330,6 +339,7 @@ async function runJob(path, body, title, completed) {
     }
   } catch (error) {
     if (path === 'api/youtube') showYoutubeFailure(error.message, body);
+    else if (path === 'api/publish') showPublication({ status: 'failed', url: state.publishedUrl, error: error.message });
     else showNotice(error.message || 'Something went wrong. Please try again.', true);
   } finally { endBusy(); }
 }
@@ -465,8 +475,30 @@ function showResult(result) {
   $('#download-result').download = `${result.song.title}.mid`;
   $('#result-section').hidden = false;
   requestAnimationFrame(drawNotes);
-  showNotice('MIDI saved. Listen to the result, then download it or publish it to your library.');
+  showPublication(result.publication);
   $('#result-section').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'nearest' });
+}
+
+function showPublication(publication) {
+  const view = publicationPresentation(publication, state.publishedUrl);
+  if (state.result) {
+    state.result.publication = publication;
+    $('#result-publication').dataset.status = view.status;
+    $('#publication-title').textContent = view.title;
+    $('#publication-message').textContent = view.message;
+    $('#result-public-library').hidden = !view.url;
+    if (view.url) $('#result-public-library').href = view.url;
+    else $('#result-public-library').removeAttribute('href');
+    $('#retry-publication').hidden = !view.retry;
+    $('#retry-publication').textContent = view.retryLabel;
+  }
+  showNotice(view.notice, view.status === 'failed', view.error);
+}
+
+function publishLibrary() {
+  runJob('api/publish', {}, 'Publishing your MIDI library', result => {
+    showPublication(result?.publication || result);
+  });
 }
 
 function drawNotes() {
@@ -668,6 +700,7 @@ function stopAudio(increment = true) {
 
 async function init() {
   $('#use-zen-session').checked = false;
+  $('#publish-on-convert').checked = true;
   for (const selector of ['#first-midi', '#last-midi', '#split-midi']) {
     for (let pitch = 0; pitch <= 127; pitch++) {
       const option = el('option', '', `${noteName(pitch)} · ${pitch}`);
@@ -683,14 +716,15 @@ async function init() {
       const status = await response.json();
       state.local = status.local === true;
       if (state.local) {
+        state.autoPublishSupported = status.features?.autoPublish === true;
         const missing = ['ffmpeg', 'ffprobe', 'ytdlp'].filter(name => !status.dependencies?.[name]);
         if (missing.length) {
           $('#dependencies').hidden = false;
           $('#dependencies').textContent = `Finish local setup: ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing. Follow the setup instructions in the GitHub repository, then restart Fallnote.`;
         }
         if (status.publishedUrl) {
-          const url = new URL(status.publishedUrl);
-          if (url.protocol === 'https:') $('#published-link').href = url.href;
+          const url = safePublishedUrl(status.publishedUrl, status.publishedUrl);
+          if (url) { state.publishedUrl = url; $('#published-link').href = url; }
         }
       }
     }
@@ -703,6 +737,7 @@ async function init() {
   $('#publish-explainer').hidden = !state.local;
   $('#public-explainer').hidden = state.local;
   $('#static-guide').hidden = state.local;
+  $('#runtime-update-notice').hidden = !state.local || state.autoPublishSupported;
   if (!state.local) {
     $('.workspace').hidden = true;
     $('.format-note').hidden = true;
@@ -763,15 +798,17 @@ $('#demo-button').addEventListener('click', async () => {
 });
 $('#cancel-job').addEventListener('click', async () => {
   clearYoutubeRecovery();
-  if (!state.job) return;
+  if (!state.job || !state.jobCancellable || state.cancelling) return;
+  state.cancelling = true;
   $('#cancel-job').disabled = true;
   $('#cancel-job').textContent = 'Cancelling…';
   try { await request(`api/jobs/${encodeURIComponent(state.job)}/cancel`, { method: 'POST', body: '{}' }); }
-  catch (error) { showNotice(error.message, true); $('#cancel-job').disabled = false; $('#cancel-job').textContent = 'Cancel'; }
+  catch (error) { showNotice(error.message, true); state.cancelling = false; $('#cancel-job').disabled = !state.jobCancellable; $('#cancel-job').textContent = 'Cancel'; }
 });
 $('#convert-form').addEventListener('submit', event => {
   event.preventDefault();
   if (!state.source || state.busy) return;
+  if (!state.autoPublishSupported) { showNotice('Restart the local Fallnote server and refresh this page before converting. The running server does not support automatic VR publishing yet.', true); return; }
   const config = calibration();
   if (config.firstMidi >= config.lastMidi) { showNotice('The first visible note must be lower than the last visible note.', true); return; }
   const startTime = Number($('#start-time').value), endTime = Number($('#end-time').value);
@@ -782,6 +819,7 @@ $('#convert-form').addEventListener('submit', event => {
   video.pause(); stopAudio();
   runJob('api/convert', {
     sourceId: state.source.sourceId, title, artist: $('#song-artist').value.trim(), calibration: config,
+    publish: $('#publish-on-convert').checked,
     options: {
       fps: Number($('#detection-fps').value), saturation: Number($('#saturation').value) / 100,
       minNote: Number($('#minimum-note').value), splitMidi: Number($('#split-midi').value),
@@ -791,15 +829,8 @@ $('#convert-form').addEventListener('submit', event => {
     },
   }, 'Reading the falling notes', async result => { showResult(result); await loadLibrary(); });
 });
-$('#publish-button').addEventListener('click', () => {
-  runJob('api/publish', {}, 'Publishing your MIDI library', result => {
-    showNotice('Library published. Your MIDI files are now in GitHub; the public page may take a minute to update.');
-    if (result?.url) {
-      const url = new URL(result.url);
-      if (url.protocol === 'https:') $('#published-link').href = url.href;
-    }
-  });
-});
+$('#publish-button').addEventListener('click', publishLibrary);
+$('#retry-publication').addEventListener('click', publishLibrary);
 $('#keyboard-preset').addEventListener('change', event => {
   const range = presets[event.target.value];
   $('#custom-range').hidden = Boolean(range);

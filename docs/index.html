@@ -47,14 +47,15 @@
 
       <section id="convert-view" aria-labelledby="convert-heading">
         <div class="page-heading">
-          <div><h1 id="convert-heading">From falling notes to your next practice.</h1><p>Bring a piano tutorial. Leave with a MIDI you can play in VR.</p></div>
+          <div><h1 id="convert-heading">From falling notes to your next practice.</h1><p>Convert on this PC, publish automatically, then download from your headset browser.</p></div>
           <span class="format-note"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4v16m10-16v16M4 10h6V4H4zm10 0h6V4h-6zM4 20h16" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg> Standard MIDI · Two hands</span>
         </div>
         <div id="static-guide" class="static-guide" hidden>
-          <div><strong>Conversion runs on your computer.</strong><p>This GitHub page holds your published MIDI library. Open the local app to add YouTube tutorials, align the notes, and publish new songs.</p></div>
+          <div><strong>Convert on your PC. Download in VR.</strong><p>Open the local app to convert tutorials and publish them here. Your published MIDI files stay online even when your PC is off.</p></div>
           <a class="button primary" href="https://github.com/GOODMAN-PRO/fallnote#run-on-windows" target="_blank" rel="noopener noreferrer">Set up the local app <span aria-hidden="true">↗</span></a>
         </div>
         <div id="dependencies" class="dependency-note" hidden></div>
+        <div id="runtime-update-notice" class="dependency-note" role="status" hidden><strong>Restart the local app to continue.</strong> The running server does not support automatic VR publishing yet. Restart Fallnote, then refresh this page to enable conversion.</div>
         <div class="workspace">
           <div class="workbench">
             <form id="youtube-form" class="source-form">
@@ -117,13 +118,14 @@
                     <label class="checkbox-label"><input id="trim-silence" type="checkbox" checked> Trim silence before the first note</label>
                   </div>
                 </details>
-                <div class="convert-action"><button id="convert-button" class="button primary full-width" type="submit"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18V5l11-2v13M9 9l11-2" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><ellipse cx="6" cy="18" rx="3" ry="2" fill="currentColor"/><ellipse cx="17" cy="16" rx="3" ry="2" fill="currentColor"/></svg> Convert to MIDI</button><p>Saved to your local library automatically.</p></div>
+                <div class="convert-action"><div class="publish-choice"><label class="checkbox-label"><input id="publish-on-convert" type="checkbox" checked aria-describedby="publish-disclosure"> Publish to my VR library</label><p id="publish-disclosure">MIDI files and song details will be public. The video stays on this PC.</p></div><button id="convert-button" class="button primary full-width" type="submit"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18V5l11-2v13M9 9l11-2" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><ellipse cx="6" cy="18" rx="3" ry="2" fill="currentColor"/><ellipse cx="17" cy="16" rx="3" ry="2" fill="currentColor"/></svg> Convert to MIDI</button><p class="local-save-note">A copy is always saved on this PC.</p></div>
               </fieldset>
             </form>
           </aside>
         </div>
         <section id="result-section" class="result-section" aria-labelledby="result-title" hidden>
           <div class="result-heading"><div><span class="success-label">Conversion complete</span><h2 id="result-title">Your MIDI is ready</h2><p id="result-description"></p></div><div class="result-actions"><button id="preview-result" class="button secondary" type="button">Listen to MIDI</button><a id="download-result" class="button primary" href="./" download>Download MIDI <span aria-hidden="true">↓</span></a></div></div>
+          <div id="result-publication" class="publication-status" role="status"><div><strong id="publication-title">Saved on this PC</strong><p id="publication-message"></p></div><div class="publication-actions"><a id="result-public-library" class="button secondary" href="https://goodman-pro.github.io/fallnote/" target="_blank" rel="noopener noreferrer" hidden>Open VR library <span aria-hidden="true">↗</span></a><button id="retry-publication" class="button secondary" type="button" data-local data-idle hidden>Retry Publish library</button></div></div>
           <canvas id="notes-preview" aria-label="Detected MIDI notes. Higher notes appear higher on this chart." role="img"></canvas>
           <div class="result-footer"><p>Listen for missing or extra notes before practising. Adjust the guides and convert again if needed.</p><button id="open-library" class="text-button" type="button">Review in your library <span aria-hidden="true">→</span></button></div>
         </section>
@@ -131,13 +133,13 @@
 
       <section id="library-view" aria-labelledby="library-heading" hidden>
         <div class="page-heading library-heading"><div><div class="heading-with-tag"><h1 id="library-heading">Your practice library</h1><span id="library-mode" class="tag">Local</span></div><p>Keep the songs you want to learn, ready for your piano in VR.</p></div><button id="publish-button" class="button primary" type="button" data-local data-idle><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M5 14v6h14v-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg> Publish library</button></div>
-        <div id="publish-explainer" class="library-info"><p><strong>On your computer.</strong> Publish your saved MIDI files to make them available on your GitHub page.</p><a id="published-link" href="https://goodman-pro.github.io/fallnote/" target="_blank" rel="noopener noreferrer">Open published library <span aria-hidden="true">↗</span></a></div>
-        <div id="public-explainer" class="library-info" hidden><p><strong>Ready to practise.</strong> Download a MIDI, then use your VR piano app's file import. Versions labelled “Single Track” combine both hands in one track.</p><button id="show-setup" class="text-button" type="button">Add your own tutorials <span aria-hidden="true">→</span></button></div>
+        <div id="publish-explainer" class="library-info"><p><strong>Your PC to VR link.</strong> New conversions publish automatically when selected. After editing song details, use Publish library. Bookmark this link in your headset; published downloads work with this PC off.</p><a id="published-link" class="button secondary" href="https://goodman-pro.github.io/fallnote/" target="_blank" rel="noopener noreferrer">Open VR library <span aria-hidden="true">↗</span></a></div>
+        <div id="public-explainer" class="library-info" hidden><p><strong>Download straight to your headset.</strong> Open this page in your VR browser, download a MIDI, then use your piano app's file import. Your PC can stay off.</p><button id="show-setup" class="text-button" type="button">Add tutorials from your PC <span aria-hidden="true">→</span></button></div>
         <div class="library-toolbar"><div class="search-box"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><input id="library-search" type="search" placeholder="Search title or artist" aria-label="Search library"></div><label class="review-filter"><input id="reviewed-filter" type="checkbox"> Reviewed only</label><span id="song-count" class="muted">Loading songs…</span></div>
         <div id="library-loading" class="library-loading" aria-label="Loading library"><div></div><div></div><div></div></div>
         <div id="library-list" class="library-list"></div>
         <div id="library-empty" class="library-empty" hidden><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="9" y="7" width="30" height="36" rx="4" stroke="currentColor" stroke-width="1.8"/><path d="M17 17h14m-14 6h9m-9 6h6m7 6V24l7-2v10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><ellipse cx="28" cy="35" rx="2.5" ry="1.8" fill="currentColor"/></svg><h2 id="empty-title">A place for your next favourite song</h2><p id="empty-copy">Convert your first tutorial and it will appear here, with a MIDI ready to download.</p><button id="empty-action" class="button secondary" type="button">Convert a tutorial <span aria-hidden="true">→</span></button></div>
-        <div class="vr-note"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M8 9h16l4 7v9h-7l-5-5-5 5H4v-9l4-7Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="10" cy="17" r="2" stroke="currentColor" stroke-width="1.7"/><circle cx="22" cy="17" r="2" stroke="currentColor" stroke-width="1.7"/></svg><div><strong>A little closer to playing it yourself.</strong><p>Download your .mid file, then <a href="https://pianogram.io/" target="_blank" rel="noopener noreferrer">open Pianogram</a> and upload it to your account. Hand display and playback can vary by app version; check the result in your headset.</p></div></div>
+        <div class="vr-note"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M8 9h16l4 7v9h-7l-5-5-5 5H4v-9l4-7Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="10" cy="17" r="2" stroke="currentColor" stroke-width="1.7"/><circle cx="22" cy="17" r="2" stroke="currentColor" stroke-width="1.7"/></svg><div><strong>One library, from PC to headset.</strong><p>Convert and publish on your PC. Open your VR library in the headset browser and download the .mid file. Use your piano app's file import to play it.</p></div></div>
       </section>
       <footer class="app-footer"><span>Fallnote reads the video, one note at a time.</span><span>Visual detection <span aria-hidden="true">·</span> Review before you practise</span></footer>
     </main>

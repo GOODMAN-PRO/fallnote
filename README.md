@@ -21,8 +21,10 @@ Open `http://127.0.0.1:8788`. There are no npm packages to install. The converte
 1. Paste a YouTube link and load the video. Use a tutorial with a fixed, visible keyboard and solid coloured falling bars. If YouTube asks you to sign in, the optional Zen checkbox permits using your Zen YouTube session for that import only. It resets after each request. Without that explicit selection, Fallnote does not read browser cookies. Local MP4 uploads are available as a fallback.
 2. Seek to a part with visible notes. Choose the visible keyboard range, align its left and right edges, and put the scan line just above the keys where solid bars pass. The first and last selected notes must be white keys.
 3. Set a song title. Choose approximate hand splitting by pitch, or map the two bar colours to hands. Convert and listen to the result.
-4. The MIDI is saved in your local library. Mark it reviewed after checking it, then choose **Publish library** to send the library to GitHub. Publishing includes song titles, artist labels, source names and MIDI files. Original videos stay on your PC.
+4. **Publish to my VR library** is on by default. After conversion, Fallnote saves the MIDI on your PC, publishes the library to GitHub, and checks that the public download is live. Wait for **Ready in your VR library** before switching your PC off. Publishing includes song titles, artist labels, source names and MIDI files; original videos stay on your PC. Turn this option off to keep this conversion local until the next time you publish the library. If publishing fails, the MIDI stays saved and **Publish library** retries without reconverting.
 5. Download a `.mid` from the published page and import it directly in Pianogram on your headset. The library's **Kiss of Death - Easy Piano** file has been confirmed to display notes through this route. New conversions still need their own playback and note-accuracy checks.
+
+The PC is needed for conversion and publishing. Once the website says the song is ready, the GitHub Pages downloads remain available with the PC switched off. Renaming or removing a local song still needs **Publish library** to update the public website.
 
 The built-in **calibration exercise** is an original, generated test clip containing chords, black keys, long notes and repeated notes. Its known note sequence is used to check the complete video-to-MIDI path.
 
@@ -41,7 +43,7 @@ This version uses deterministic computer vision, not a trained AI model. It read
 
 This checkout targets `GOODMAN-PRO/fallnote`. For your own copy, set `FALLNOTE_REPOSITORY=your-account/your-repository`, use that repository as Git remote `origin`, and work on `main`.
 
-Configure GitHub Pages to deploy from **main /docs**. The app commits and pushes `docs/library` when you click Publish library. It never puts GitHub tokens into the browser. A rejected Git push is shown as an error; reconcile remote changes before retrying.
+Configure GitHub Pages to deploy from **main /docs**. The app commits and pushes `docs/library` after conversion (unless automatic publishing is turned off), or when you click **Publish library**. It never puts GitHub tokens into the browser and refuses to push unrelated unpublished app commits. A rejected Git push is shown as an error; reconcile remote changes before retrying. A successful push alone is labelled as updating until the public manifest and MIDI bytes match. If that check times out, publishing is pending, not verified ready.
 
 If using a fork, update the static repository links in `docs/index.html` and `docs/app.mjs` as well. Do not expose the local server through a public tunnel.
 
