@@ -226,9 +226,17 @@ test('library saves real MIDI, edits only supported metadata, preserves Unicode 
   assert.equal(download.status, 200);
   assert.equal(download.bytes.subarray(0, 4).toString(), 'MThd');
   assert.equal(download.bytes.readUInt16BE(8), 1, 'Export is Standard MIDI File type 1');
+  assert.deepEqual(song.handCounts, { left: 1, right: 1 });
+  assert.deepEqual(Object.keys(song.handFiles).sort(), ['both', 'left', 'right']);
+  for (const file of Object.values(song.handFiles)) {
+    const handDownload = await request(`/${file}`);
+    assert.equal(handDownload.status, 200);
+    assert.equal(handDownload.bytes.subarray(0, 4).toString(), 'MThd');
+    assert.equal(handDownload.bytes.readUInt16BE(10), 2, 'Hand downloads have two musical tracks');
+  }
   const changed = await jsonRequest(`/api/library/${song.id}`, 'PATCH', {
     title: 'Revised\u0000 title', artist: 'Composer', reviewed: true,
-    id: missingId, file: '../private-secret.txt', noteCount: -1
+    id: missingId, file: '../private-secret.txt', noteCount: -1, handFiles: { both: '../private-secret.txt' }
   });
   assert.equal(changed.status, 200);
   const updated = JSON.parse(changed.text).song;
@@ -238,6 +246,7 @@ test('library saves real MIDI, edits only supported metadata, preserves Unicode 
   assert.equal(updated.id, song.id);
   assert.equal(updated.file, song.file);
   assert.equal(updated.noteCount, 2);
+  assert.deepEqual(updated.handFiles, song.handFiles);
   const encoded = Buffer.from(JSON.stringify({ title: '夜のピアノ 🎹' }));
   const firstMultibyte = encoded.findIndex(byte => byte > 127);
   const unicode = await request(`/api/library/${song.id}`, {
@@ -251,6 +260,7 @@ test('library saves real MIDI, edits only supported metadata, preserves Unicode 
   const removed = await jsonRequest(`/api/library/${song.id}`, 'DELETE', {});
   assert.equal(removed.status, 200);
   assert.equal((await request(`/${song.file}`)).status, 404);
+  for (const file of Object.values(song.handFiles)) assert.equal((await request(`/${file}`)).status, 404);
   assert.equal((await app.library.read()).songs.length, 0);
   for (const method of ['PATCH', 'DELETE']) {
     const absent = await jsonRequest(`/api/library/${song.id}`, method, {});
@@ -266,7 +276,12 @@ test('serialized library writes preserve simultaneous saves', async () => {
   const manifest = await app.library.read();
   assert.equal(manifest.songs.length, saved.length);
   assert.equal(new Set(manifest.songs.map(song => song.id)).size, saved.length);
-  for (const song of saved) assert.equal((await request(`/${song.file}`)).status, 200);
+  for (const song of saved) {
+    assert.equal((await request(`/${song.file}`)).status, 200);
+    assert.equal(song.handFiles.left, undefined, 'No empty left-hand download is advertised');
+    assert.equal(song.handCounts.right, 1);
+    assert.equal((await request(`/${song.handFiles.right}`)).status, 200);
+  }
   await Promise.all(saved.map(song => app.library.remove(song.id)));
   assert.deepEqual((await app.library.read()).songs, []);
 });

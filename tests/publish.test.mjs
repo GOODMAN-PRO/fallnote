@@ -114,6 +114,42 @@ test('verifyFile checks the new MIDI and provides its public download URL', asyn
   assert.ok(!mock.requests.some(({ url }) => url.pathname.endsWith('/beta.mid')));
 });
 
+test('automatic publication verifies every hand download for the newly saved song', async t => {
+  const song = { id: 'alpha', title: 'Alpha', file: 'library/midi/alpha.mid',
+    handFiles: { both: 'library/midi/alpha-hands.mid', left: 'library/midi/alpha-left.mid', right: 'library/midi/alpha-right.mid' } };
+  const files = await fixture(t, { songs: [song] });
+  for (const file of Object.values(song.handFiles)) await writeFile(join(files.root, 'docs', file), beta);
+  const mock = harness({ ...files, respond: url => url.pathname.endsWith('/manifest.json') ? Response.json(files.manifest) :
+    new Response(url.pathname.endsWith('/alpha.mid') ? alpha : beta) });
+  const result = await publishLibrary({ root: files.root, verifyFile: song.file, ...mock.options });
+  assert.equal(result.status, 'published');
+  for (const file of [song.file, ...Object.values(song.handFiles)]) {
+    assert.ok(mock.requests.some(({ url }) => url.pathname === '/fallnote/' + file), file);
+  }
+});
+
+test('a missing hand download prevents a ready-in-VR result even when the master is live', async t => {
+  const song = { id: 'alpha', title: 'Alpha', file: 'library/midi/alpha.mid', handFiles: { both: 'library/midi/beta.mid', left: 'library/midi/alpha-left.mid' } };
+  const files = await fixture(t, { songs: [song] });
+  await writeFile(join(files.root, 'docs', song.handFiles.left), beta);
+  const mock = harness({ ...files, respond: url => url.pathname.endsWith('/manifest.json') ? Response.json(files.manifest) :
+    url.pathname.endsWith('/alpha-left.mid') ? new Response('', { status: 404 }) : new Response(url.pathname.endsWith('/alpha.mid') ? alpha : beta) });
+  const result = await publishLibrary({ root: files.root, verifyFile: song.file, ...mock.options, timeoutMs: 0 });
+  assert.equal(result.status, 'pending');
+});
+
+test('unsafe or malformed hand download paths fail before git or public requests', async t => {
+  for (const handFiles of [{ both: '../outside.mid' }, { both: 'library/midi/alpha.mid', left: 'https://example.com/private.mid' },
+    { both: 'library/midi/alpha.mid', right: 'library/midi/../../private.mid' }, { left: 'library/midi/alpha.mid' },
+    { both: 'library/midi/alpha.mid', unexpected: 'library/midi/beta.mid' }]) {
+    const files = await fixture(t, { songs: [{ id: 'alpha', file: 'library/midi/alpha.mid', handFiles }] });
+    const mock = harness(files);
+    await assert.rejects(publishLibrary({ root: files.root, ...mock.options }), /invalid MIDI file path/);
+    assert.equal(mock.commands.length, 0);
+    assert.equal(mock.requests.length, 0);
+  }
+});
+
 test('waits through a stale manifest and then different MIDI bytes before reporting published', async (t) => {
   const files = await fixture(t);
   const wrongMidi = Buffer.from(alpha);

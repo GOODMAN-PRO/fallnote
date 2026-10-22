@@ -25,6 +25,7 @@ A clear music workbench. The learner compares a dark video frame with calibratio
 - Ask for manual alignment when the keyboard or octave cannot be confirmed; do not silently guess.
 - Label algorithmic hand splitting and timing limits honestly.
 - Keep downloads available without login on the public library.
+- Offer both-hands and individual-hand downloads, preserving the song's original timing.
 
 ## Accessibility
 

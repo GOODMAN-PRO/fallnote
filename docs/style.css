@@ -206,6 +206,12 @@ fieldset:disabled { opacity: .65; }
 .result-heading h2 { font-size: 21px; }
 .result-heading p { color: var(--muted); font-size: 12px; margin-top: 5px; }
 .result-actions { display: flex; gap: 8px; }
+.hand-downloads { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.hand-downloads .button { min-height: 40px; padding: 8px 12px; }
+.hand-download-label { color: var(--muted); font-size: 11px; margin-right: 2px; }
+.result-downloads { margin-top: 18px; }
+.hand-download-guide { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 10px; max-width: 85ch; }
+.library-hand-guide { margin: 0 0 16px; }
 .publication-status { display: flex; align-items: center; justify-content: space-between; gap: 22px; background: var(--subtle); border-radius: 6px; margin-top: 22px; padding: 16px 18px; }
 .publication-status > div:first-child { min-width: 0; }
 .publication-status strong { font-size: 13px; font-weight: 620; }

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { encodeMidi, validateNotes } from '../lib/midi.mjs';
 
 // Independent SMF reader checks actual bytes, lengths, variable-length values,
@@ -60,6 +61,97 @@ function parseMidi(bytes) {
 }
 
 const note = (overrides = {}) => ({ pitch: 60, start: 0, duration: 1, velocity: 90, hand: 'right', ...overrides });
+
+test('default export remains byte-for-byte compatible with the existing conductor layout', () => {
+  const notes = [note(), note({ pitch: 48, start: 0.5, duration: 2, velocity: 73, hand: 'left' })];
+  const options = { title: 'Piano étude', tempo: 137.5 };
+  const bytes = encodeMidi(notes, options);
+  // Captured before adding hand export options; protects the existing working MIDI format.
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), '4e60b7a225ded400ebb98c99b3d4f8c74d8eb33644b3cd3b43fade50455c4791');
+  assert.deepEqual(encodeMidi(notes, { ...options, layout: 'conductor-first', hand: 'both' }), bytes);
+});
+
+test('hand-tracks export has right then left musical tracks, with tempo and meter in the first track', () => {
+  const parsed = parseMidi(encodeMidi([
+    note({ pitch: 72, start: 2, duration: 0.5, velocity: 45, hand: 'left' }),
+    note({ pitch: 48, start: 2, duration: 1, velocity: 112 }),
+    note({ pitch: 60, start: 3, duration: 0.25, velocity: 62, hand: 'left' }),
+    note({ pitch: 60, start: 3, duration: 0.5, velocity: 99 }),
+  ], { title: 'Crossed hands', layout: 'hand-tracks' }));
+  assert.equal(parsed.format, 1);
+  assert.equal(parsed.ppq, 480);
+  assert.equal(parsed.tracks.length, 2);
+  const [right, left] = parsed.tracks;
+  assert.deepEqual(parsed.tracks.map((track) => new TextDecoder().decode(track.find((event) => event.type === 3).data)), ['Right Hand', 'Left Hand']);
+  assert.equal(new TextDecoder().decode(right.find((event) => event.type === 1).data), 'Crossed hands');
+  assert.deepEqual(right.filter((event) => [0x51, 0x58].includes(event.type)).map((event) => [event.tick, event.type, [...event.data]]), [
+    [0, 0x58, [4, 2, 24, 8]], [0, 0x51, [7, 161, 32]],
+  ]);
+  assert.equal(left.filter((event) => [0x51, 0x58].includes(event.type)).length, 0);
+  assert.deepEqual(parsed.tracks.map((track) => {
+    const program = track.find((event) => (event.status & 0xf0) === 0xc0);
+    return [program.tick, program.status, program.program];
+  }), [[0, 0xc0, 0], [0, 0xc1, 0]]);
+  const events = (track) => track.filter((event) => [0x80, 0x90].includes(event.status & 0xf0));
+  // Assignment follows the supplied hand, even with crossed hands and a shared pitch.
+  assert.deepEqual(events(right), [
+    { tick: 1920, status: 0x90, pitch: 48, velocity: 112 },
+    { tick: 2880, status: 0x80, pitch: 48, velocity: 0 },
+    { tick: 2880, status: 0x90, pitch: 60, velocity: 99 },
+    { tick: 3360, status: 0x80, pitch: 60, velocity: 0 },
+  ]);
+  assert.deepEqual(events(left), [
+    { tick: 1920, status: 0x91, pitch: 72, velocity: 45 },
+    { tick: 2400, status: 0x81, pitch: 72, velocity: 0 },
+    { tick: 2880, status: 0x91, pitch: 60, velocity: 62 },
+    { tick: 3120, status: 0x81, pitch: 60, velocity: 0 },
+  ]);
+  assert.ok(parsed.tracks.every((track) => track.at(-1).tick === 3360));
+});
+
+test('individual hands retain intro rests and the full original song duration in either layout', () => {
+  const notes = [
+    note({ pitch: 72, start: 3, duration: 0.5, velocity: 47, hand: 'left' }),
+    note({ pitch: 48, start: 5, duration: 3, velocity: 110 }),
+  ];
+  for (const layout of ['conductor-first', 'hand-tracks']) {
+    const both = parseMidi(encodeMidi(notes, { layout, tempo: 137.5 }));
+    for (const hand of ['left', 'right']) {
+      const parsed = parseMidi(encodeMidi(notes, { layout, hand, tempo: 137.5 }));
+      assert.equal(parsed.tracks.length, both.tracks.length);
+      parsed.tracks.forEach((track, index) => {
+        const original = both.tracks[index];
+        const name = new TextDecoder().decode(track.find((event) => event.type === 3).data);
+        const expectedName = hand === 'left' ? 'Left Hand' : 'Right Hand';
+        const musicalEvents = (events) => events.filter((event) => [0x80, 0x90].includes(event.status & 0xf0));
+        assert.deepEqual(musicalEvents(track), name === expectedName ? musicalEvents(original) : []);
+        assert.equal(track.at(-1).tick, original.at(-1).tick);
+        assert.ok(track.at(-1).tick > 8000);
+      });
+    }
+  }
+});
+
+test('one-hand source and empty source retain stable hand-track indexes without inventing notes', () => {
+  for (const sourceHand of ['left', 'right']) {
+    const notes = [note({ start: 4, duration: 2, hand: sourceHand })];
+    for (const selectedHand of ['both', 'left', 'right']) {
+      const parsed = parseMidi(encodeMidi(notes, { layout: 'hand-tracks', hand: selectedHand }));
+      assert.equal(parsed.tracks.length, 2);
+      assert.ok(parsed.tracks.every((track) => track.at(-1).tick === 5760));
+      parsed.tracks.forEach((track, index) => {
+        const on = track.filter((event) => (event.status & 0xf0) === 0x90);
+        const trackHand = index === 0 ? 'right' : 'left';
+        assert.equal(on.length, trackHand === sourceHand && [sourceHand, 'both'].includes(selectedHand) ? 1 : 0);
+        if (on.length) assert.equal(on[0].tick, 3840);
+      });
+    }
+  }
+  const empty = parseMidi(encodeMidi([], { layout: 'hand-tracks' }));
+  assert.equal(empty.tracks.length, 2);
+  assert.ok(empty.tracks.every((track) => track.at(-1).tick === 0));
+  assert.equal(empty.tracks.flat().filter((event) => (event.status & 0xf0) === 0x90).length, 0);
+});
 
 test('exports a valid type-1 file with conductor and independent named hand tracks', () => {
   const parsed = parseMidi(encodeMidi([note(), note({ pitch: 48, hand: 'left' })], { title: 'Piano étude' }));
@@ -134,6 +226,8 @@ test('validation makes copies, supplies velocity, sorts, and rejects invalid val
   assert.throws(() => encodeMidi([note()], { tempo: 1 }), /tempo range/);
   assert.throws(() => encodeMidi([note()], { tempo: Infinity }), /Tempo/);
   assert.throws(() => encodeMidi([note()], { title: 7 }), /title/);
+  for (const layout of ['other', '', null, 0]) assert.throws(() => encodeMidi([note()], { layout }), /layout/);
+  for (const hand of ['other', '', null, 0]) assert.throws(() => encodeMidi([note()], { hand }), /hand/);
   assert.throws(() => encodeMidi([note({ start: 1000000 })]), /delta-time/);
 });
 

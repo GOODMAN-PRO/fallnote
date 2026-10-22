@@ -1,6 +1,7 @@
 import { youtubeErrorPresentation, youtubeRetryRequest } from './youtube-errors.mjs';
 import { publicationPresentation, safePublishedUrl } from './publication.mjs';
 import { youtubeRequest, retryYoutubeRequest, createYoutubeRunGate, scanRows } from './auto-flow.mjs';
+import { handDownloadOptions, isMidiFilePath } from './hand-downloads.mjs';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -104,7 +105,7 @@ async function request(path, options = {}) {
 }
 
 function midiUrl(file) {
-  if (typeof file !== 'string' || !/^library\/midi\/[A-Za-z0-9_.-]+\.mid$/i.test(file)) {
+  if (!isMidiFilePath(file)) {
     throw new Error('This song has an invalid MIDI file path.');
   }
   return new URL(file, document.baseURI).href;
@@ -459,6 +460,7 @@ function renderLibrary() {
   list.replaceChildren();
   $('#song-count').textContent = `${songs.length} ${songs.length === 1 ? 'song' : 'songs'}${songs.length !== state.songs.length ? ` of ${state.songs.length}` : ''}`;
   $('#library-empty').hidden = songs.length > 0;
+  $('#hand-download-guide').hidden = !songs.some(song => handDownloadOptions(song).some(option => option.hand !== 'both'));
   if (!songs.length) {
     const filtered = query || reviewedOnly;
     $('#empty-title').textContent = filtered ? 'No songs match this search' : 'A place for your next favourite song';
@@ -479,16 +481,14 @@ function renderLibrary() {
     meta.append(el('span', '', `${Number.isFinite(count) ? count.toLocaleString() : '—'} notes`), el('span', '', '·'), el('span', '', song.handMode === 'color' ? 'Colour-based hands' : 'Pitch-based hands'));
     if (!song.reviewed) meta.append(el('span', '', '·'), el('span', '', 'Needs a listen'));
     main.append(meta);
+    const downloads = el('div', 'hand-downloads');
+    renderHandDownloads(downloads, song);
+    main.append(downloads);
     const actions = el('div', 'song-actions');
     actions.append(el('span', 'song-duration numeric', formatTime(song.duration)));
     const listen = button('Listen', 'button small secondary', () => playSong(song));
     listen.setAttribute('aria-label', `Listen to ${song.title}`);
     actions.append(listen);
-    const download = el('a', 'button small secondary', 'Download ↓');
-    try { download.href = midiUrl(song.file); download.download = `${song.title}.mid`; }
-    catch { download.removeAttribute('href'); download.textContent = 'File unavailable'; }
-    download.setAttribute('aria-label', `Download ${song.title} as MIDI`);
-    actions.append(download);
     if (state.local) {
       const edit = button('', 'icon-button', () => { state.editing = state.editing === song.id ? null : song.id; renderLibrary(); if (state.editing) $(`#edit-title-${CSS.escape(song.id)}`)?.focus(); });
       edit.append(icon('edit'));
@@ -553,12 +553,36 @@ function showResult(result) {
   state.result = result;
   $('#result-title').textContent = result.song.title;
   $('#result-description').textContent = `${result.notes.length.toLocaleString()} notes · ${formatTime(result.song.duration)} · Saved to your local library`;
-  $('#download-result').href = midiUrl(result.song.file);
-  $('#download-result').download = `${result.song.title}.mid`;
+  const downloads = renderHandDownloads($('#result-downloads'), result.song, true);
+  $('#result-hand-guide').hidden = !downloads.some(option => option.hand !== 'both');
   $('#result-section').hidden = false;
   requestAnimationFrame(drawNotes);
   showPublication(result.publication);
   $('#result-section').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'nearest' });
+}
+
+function renderHandDownloads(container, song, result = false) {
+  const options = handDownloadOptions(song);
+  container.replaceChildren();
+  container.setAttribute('role', 'group');
+  container.setAttribute('aria-label', `Download ${song.title} as MIDI`);
+  if (options.some(option => option.label !== 'Download MIDI')) {
+    container.append(el('span', 'hand-download-label', 'Download MIDI'));
+  }
+  for (const option of options) {
+    const link = el('a', `button small ${result && option.hand === 'both' ? 'primary' : 'secondary'}`, option.label);
+    link.href = midiUrl(option.file);
+    link.download = option.filename;
+    link.dataset.hand = option.hand;
+    link.setAttribute('aria-label', `Download ${song.title}${option.label === 'Download MIDI' ? '' : ` — ${option.label}`} as MIDI`);
+    const arrow = el('span', '', '↓');
+    arrow.setAttribute('aria-hidden', 'true');
+    link.append(arrow);
+    if (result && option.hand === 'both') link.id = 'download-result';
+    container.append(link);
+  }
+  if (!options.length) container.append(el('span', 'muted', 'MIDI file unavailable'));
+  return options;
 }
 
 function showPublication(publication) {

@@ -77,7 +77,7 @@ export function createApp({ root = ROOT, port = 8788, repository = process.env.F
       if (req.method === 'GET' && path === '/api/status') {
         dependencies ||= Promise.all([executablePresent('ffmpeg'), executablePresent('ffprobe'), executablePresent('yt-dlp'), executablePresent('gh')])
           .then(([ffmpeg, ffprobe, ytdlp, github]) => ({ ffmpeg, ffprobe, ytdlp, github }));
-        return json(res, 200, { local: true, version: '1.2.0', features: { autoPublish: true, autoConvert: true }, dependencies: await dependencies, repository, publishedUrl });
+        return json(res, 200, { local: true, version: '1.3.0', features: { autoPublish: true, autoConvert: true, handDownloads: true }, dependencies: await dependencies, repository, publishedUrl });
       }
       const videoMatch = path.match(/^\/api\/videos\/([a-f0-9-]{36})$/);
       if (req.method === 'GET' && videoMatch) {

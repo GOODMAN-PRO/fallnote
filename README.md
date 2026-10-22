@@ -24,6 +24,12 @@ Open `http://127.0.0.1:8788`. There are no npm packages to install. The converte
 4. **Publish to my VR library** is on by default. After conversion, Fallnote saves the MIDI on your PC, publishes the library to GitHub, and checks that the public download is live. Wait for **Ready in your VR library** before switching your PC off. Publishing includes song titles, artist labels, source names and MIDI files; original videos stay on your PC. Turn this option off to keep this conversion local until the next time you publish the library. If publishing fails, the MIDI stays saved and **Publish library** retries without reconverting.
 5. Download a `.mid` from the published page and import it directly in Pianogram on your headset. The library's **Kiss of Death - Easy Piano** file has been confirmed to display notes through this route. New conversions still need their own playback and note-accuracy checks.
 
+### Practise one hand
+
+Each new conversion offers **Both hands**, **Left hand** and **Right hand** downloads. Import the new file into Pianogram; previously imported copies do not change when Fallnote is updated. Left/right files contain only the selected hand, with the original timing and rests preserved. Use both-hands playback for a single-hand file. A hand with no detected notes has no separate download.
+
+The Both hands download uses two musical tracks: Right Hand first on MIDI channel 1, Left Hand second on channel 2 (one-based), with tempo and explicit 4/4 in the first track. This is a compatibility layout for hand selectors that may count a separate conductor track; Pianogram's native selector still needs a headset check. The original three-track master stays available at its original file URL. The hand-only files provide separate practice even when the app does not recognise the combined file's hand assignments.
+
 The PC is needed for conversion and publishing. Once the website says the song is ready, the GitHub Pages downloads remain available with the PC switched off. Renaming or removing a local song still needs **Publish library** to update the public website.
 
 If YouTube asks you to sign in, the optional Zen checkbox permits using your Zen YouTube session for that import only. It resets after each request. Without that explicit selection, Fallnote does not read browser cookies. Pasting a link never silently grants browser-session access. Local MP4 uploads remain available for manual conversion.
@@ -45,7 +51,7 @@ This version uses deterministic computer vision and audio analysis, not a traine
 
 This checkout targets `GOODMAN-PRO/fallnote`. For your own copy, set `FALLNOTE_REPOSITORY=your-account/your-repository`, use that repository as Git remote `origin`, and work on `main`.
 
-Configure GitHub Pages to deploy from **main /docs**. The app commits and pushes `docs/library` after conversion (unless automatic publishing is turned off), or when you click **Publish library**. It never puts GitHub tokens into the browser and refuses to push unrelated unpublished app commits. A rejected Git push is shown as an error; reconcile remote changes before retrying. A successful push alone is labelled as updating until the public manifest and MIDI bytes match. If that check times out, publishing is pending, not verified ready.
+Configure GitHub Pages to deploy from **main /docs**. The app commits and pushes `docs/library` after conversion (unless automatic publishing is turned off), or when you click **Publish library**. It never puts GitHub tokens into the browser and refuses to push unrelated unpublished app commits. A rejected Git push is shown as an error; reconcile remote changes before retrying. A successful push alone is labelled as updating until the public manifest and every download for the song, including its hand files, match. If that check times out, publishing is pending, not verified ready.
 
 If using a fork, update the static repository links in `docs/index.html` and `docs/app.mjs` as well. Do not expose the local server through a public tunnel.
 

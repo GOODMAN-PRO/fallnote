@@ -14,7 +14,16 @@
       "sourceName": "Sword Art Online OP - \"Crossing Field\" - MEDIUM Piano Tutorial & Sheet Music",
       "reviewed": false,
       "pitchMin": 34,
-      "pitchMax": 89
+      "pitchMax": 89,
+      "handCounts": {
+        "left": 464,
+        "right": 257
+      },
+      "handFiles": {
+        "both": "library/midi/17d418c4-b460-42c3-a5ad-983f21821058-hands.mid",
+        "left": "library/midi/17d418c4-b460-42c3-a5ad-983f21821058-left.mid",
+        "right": "library/midi/17d418c4-b460-42c3-a5ad-983f21821058-right.mid"
+      }
     },
     {
       "id": "a6bc664d-fddd-4ecb-8283-ded82b445819",
@@ -29,7 +38,16 @@
       "sourceName": "Darling in the FranXX OP - Kiss of Death - EASY Piano Tutorial",
       "reviewed": false,
       "pitchMin": 33,
-      "pitchMax": 77
+      "pitchMax": 77,
+      "handCounts": {
+        "left": 71,
+        "right": 200
+      },
+      "handFiles": {
+        "both": "library/midi/a6bc664d-fddd-4ecb-8283-ded82b445819-hands.mid",
+        "left": "library/midi/a6bc664d-fddd-4ecb-8283-ded82b445819-left.mid",
+        "right": "library/midi/a6bc664d-fddd-4ecb-8283-ded82b445819-right.mid"
+      }
     },
     {
       "id": "7541d71b-c62a-4e83-9536-a10adc08e908",
@@ -44,7 +62,16 @@
       "sourceName": "[Darling in the FranXX OP] \"KISS OF DEATH\" - Mika Nakashima x Hyde (Synthesia Piano Tutorial)",
       "reviewed": false,
       "pitchMin": 21,
-      "pitchMax": 108
+      "pitchMax": 108,
+      "handCounts": {
+        "left": 366,
+        "right": 495
+      },
+      "handFiles": {
+        "both": "library/midi/7541d71b-c62a-4e83-9536-a10adc08e908-hands.mid",
+        "left": "library/midi/7541d71b-c62a-4e83-9536-a10adc08e908-left.mid",
+        "right": "library/midi/7541d71b-c62a-4e83-9536-a10adc08e908-right.mid"
+      }
     }
   ]
 }
